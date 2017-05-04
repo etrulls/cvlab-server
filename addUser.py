@@ -1,15 +1,21 @@
 import csv
 import bcrypt
 # from getpass import getpass
+import sys
 
-username = 'rizzello'
-raw_password = '1234'
+# username = 'rizzello'
+# raw_password = '1234'
+username = 'eduard'
+raw_password = '5678'
 
 # salt and hash password
 salt = bcrypt.gensalt()
-combo_password = raw_password + salt
-hashed_password = bcrypt.hashpw(combo_password, salt)
-
+if sys.version_info[0] < 3:
+    combo_password = raw_password + salt
+    hashed_password = bcrypt.hashpw(combo_password, salt)
+else:
+    combo_password = raw_password + salt.decode('utf-8')
+    hashed_password = bcrypt.hashpw(combo_password.encode('utf-8'), salt)
 
 with open('users.csv', 'a') as csvfile:
     fieldnames = ['username', 'password', 'salt']
