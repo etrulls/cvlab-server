@@ -31,6 +31,10 @@ std_base64chars = "+"
 custom_base64chars = ")"
 
 
+def getImmediateSubdirectories(path):
+    return [name for name in os.listdir(path)
+            if os.path.isdir(os.path.join(path, name))]
+
 def checkUser(request):
     try:
         username = request.headers['username']
@@ -58,7 +62,25 @@ def checkUser(request):
 @app.route('/api/login', methods=['GET'])
 def loginFun():
     if checkUser(request):
-        return '', 200
+	username = request.headers['username']
+	modelsPath = os.getcwd()+"/ccboost-service/workspace/"+username+"/models" #Note : For now there is only service, future work might add more services than just ccboost
+										  #for example the user would choose the service he wants to use before logging in
+        if not os.path.isdir(modelsPath):
+		os.makedirs(modelsPath)
+	modelList = getImmediateSubdirectories(modelsPath)
+	dataPath = os.getcwd()+"/userInput/"+username
+        if not os.path.isdir(dataPath):
+		os.makedirs(dataPath)
+	dataList = getImmediateSubdirectories(dataPath)
+	
+	#return np array of format [[dataset1,dataset2...],[modelA, modelB...]]
+	#Ilastik slots are np arrays and returning this in that format makes things simpler
+	#toReturn = np.array([dataList, modelsList])
+	f = StringIO()
+        np.savez(f, data = dataList, models = modelList)
+        f.seek(0)
+        payload = f.read()
+        return payload, 200
     else:
         return '', 401
 
@@ -130,14 +152,14 @@ def sendPictureFun():
         h5.create_dataset('data', data=labels)
         h5.close()
 
-        dir_path = os.getcwd() + "/ccboost-service"
+        dir_path = os.getcwd() + "/ccboost-service/workspace"
 
         # write cfg file based on request
-        if not os.path.isdir(dir_path + '/config/' + username):
-            os.mkdir(dir_path + '/config/' + username)
+        if not os.path.isdir(dir_path + "/"+username + "/config"):
+            os.makedirs(dir_path + "/"+username + "/config")
 
         model_name = "ccboost2000stumps"
-        file = open(dir_path + "/config/" + username + "/" + tag + ".cfg", "w")
+        file = open(dir_path + "/"+username + "/config/" + tag + ".cfg", "w")
         file.write("dataset_name = \'" + tag + "\'\n")
         file.write("root = \'/cvlabdata1/home/rizzello/ccboost-service\'\n")
         file.write("stack = \'/cvlabdata1/home/rizzello/userInput/" + username + "/" + tag + "/data.h5\'\n") 
@@ -146,25 +168,36 @@ def sendPictureFun():
         file.write("num_adaboost_stumps = 2000\n")
         file.close()
 
-        subprocess.call(
+	logPath = os.getcwd()+"/userLogs/"+username
+	if not os.path.isdir(logPath):
+            os.makedirs(logPath)
+	logPath = logPath + "log.txt"
+	p = subprocess.Popen(
             ["python",
              "ccboost-service/handler.py",
              "--train",
-             dir_path + '/config/' + username + "/" + tag + ".cfg",
+             dir_path + "/"+username + "/config/" + tag + ".cfg",
              "--username",
              username,
              "--tag",
-             tag])
+             tag], stdout=subprocess.PIPE, bufsize=1)
+	for line in iter(p.stdout.readline, b''):
+		print line,
+    		#file = open(logPath, "w")
+		#file.write(line)
+		#file.close(),
+	p.stdout.close()
+	p.wait()
 
         # fetch result and send it back
-        # h5 = h5py.File('ccboost-service/runs/inputDataTest/results/outputModel/out-0-ab-max.h5', driver=None)
         h5 = h5py.File(
             dir_path +
-            "/runs/" +
-            username +
             "/" +
+            username +
+            "/runs/" +
             tag +
-            "/results/" +
+	    "/" +
+	    "/results/"+
             model_name +
             "/out-0-ab-max.h5",
             driver=None)
