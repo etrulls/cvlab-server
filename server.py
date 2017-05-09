@@ -122,7 +122,7 @@ def sendPictureFun():
         image = np.load(StringIO(bodyClear))['image']
         username = request.headers['username']
         datasetName = request.headers['datasetName']
-	modelName = request.headers['modelName']
+        modelName = request.headers['modelName']
 
         # save labels and data in h5 format
         inputDirectory = os.getcwd() + '/userInput/' + username + "/" + datasetName + "/"
