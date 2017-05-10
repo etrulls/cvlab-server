@@ -9,17 +9,17 @@ import h5py
 import string
 import ssl
 import csv
-import bcrypt
 import subprocess
 import sys
+from passlib.hash import sha256_crypt
 # import json
 # from PIL import Image
 # import zlib
 
 if sys.version_info[0] < 3:
-    from cStringIO import StringIO
+    from cStringIO import StringIO as StringBytesIO
 else:
-    from io import StringIO
+    from io import BytesIO as StringBytesIO
 
 context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
 context.load_cert_chain('server.crt', 'server.key')
@@ -46,16 +46,12 @@ def checkUser(request):
         return False
     with open('users.csv') as csvfile:
         reader = csv.reader(csvfile)
-        # reader = list(reader)
         entry = [line for line in reader if line[0] == username]
         if len(entry) != 0:
             hashed_password = entry[0][1]
-            salt = entry[0][2]
-
-            # hash password sent by client and compare
-            combo_password = password.encode('utf-8') + salt
-            new_hashed_password = bcrypt.hashpw(combo_password, salt)
-            return hashed_password == new_hashed_password
+            return sha256_crypt.verify(
+                password,
+                hashed_password)
 
         # user not in database
         else:
@@ -79,7 +75,7 @@ def loginFun():
         # return np array of format [[dataset1,dataset2...],[modelA, modelB...]]
         # Ilastik slots are np arrays and returning this in that format makes things simpler
         # toReturn = np.array([dataList, modelsList])
-        f = StringIO()
+        f = StringBytesIO()
         np.savez(f, data=dataList, models=modelList)
         f.seek(0)
         payload = f.read()
@@ -119,8 +115,8 @@ def sendPictureFun():
         bodyClear = base64.b64decode(body)
 
         # get needed data from request
-        labels = np.load(StringIO(bodyClear))['labels']
-        image = np.load(StringIO(bodyClear))['image']
+        labels = np.load(StringBytesIO(bodyClear))['labels']
+        image = np.load(StringBytesIO(bodyClear))['image']
         username = request.headers['username']
         datasetName = request.headers['datasetName']
         modelName = request.headers['modelName']
@@ -209,7 +205,7 @@ def sendPictureFun():
              data.shape[2],
              1))
 
-        f = StringIO()
+        f = StringBytesIO()
         np.savez_compressed(f, image=data)
         f.seek(0)
         compressed_data = f.read()

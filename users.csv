@@ -1,2 +1,3 @@
-username,password,salt
-rizzello,$2b$12$bNo2uQIIeIdoJtx.TC2xDOkqtjRbVtkXZJObwxvvbat82ux.gtjhe,$2b$12$bNo2uQIIeIdoJtx.TC2xDO
+username,password
+rizzello,$5$rounds=535000$2DCqSaD3eaEwPPQg$PhqgUIsIYbo0daBFnRLbz3ZmtfbKxCXdI7s9Bv64Wi6
+eduard,$5$rounds=535000$Pb5iRPKuUrNxzrIB$CQaazGlLcjrH78h2.2BLJp8KuklVhtSIXPxv/FtKAL6
