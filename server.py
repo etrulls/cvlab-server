@@ -1,19 +1,20 @@
+from __future__ import print_function
 from flask import Flask, request, render_template
 from flask_restful import Resource, Api
-# from PIL import Image
 from datetime import datetime
 import numpy as np
-# import json
 import base64
 import os
 import h5py
-# import zlib
 import string
 import ssl
 import csv
 import bcrypt
 import subprocess
 import sys
+# import json
+# from PIL import Image
+# import zlib
 
 if sys.version_info[0] < 3:
     from cStringIO import StringIO
@@ -182,7 +183,7 @@ def sendPictureFun():
              "--username",
              username], stdout=subprocess.PIPE, bufsize=1)
         for line in iter(p.stdout.readline, b''):
-            print line,
+            print(line)
         # file = open(logPath, "w")
         # file.write(line)
         # file.close(),
