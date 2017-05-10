@@ -174,7 +174,8 @@ def sendPictureFun():
         file.write("num_adaboost_stumps = 2000\n")
         file.close()
 
-        logPath = os.getcwd() + "/userLogs/" + username
+        # logPath = os.getcwd() + "/userLogs/" + username
+        logPath = os.getcwd() + "/userLogs/"
         if not os.path.isdir(logPath):
             os.makedirs(logPath)
         logPath = logPath + "log.txt"
