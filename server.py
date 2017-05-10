@@ -16,6 +16,10 @@ from passlib.hash import sha256_crypt
 # from PIL import Image
 # import zlib
 
+# Set workspace folder to that holding the current file
+# Services should be symlinked inside here
+curr_path = os.path.dirname(os.path.realpath(__file__))
+
 if sys.version_info[0] < 3:
     from cStringIO import StringIO as StringBytesIO
 else:
@@ -89,7 +93,8 @@ def progressFun():
     dir_path = os.path.dirname(os.path.realpath(__file__))
     try:
         request.headers['username']
-        file = open(dir_path + "/userLogs/rizzello/log.txt")
+        file = open(dir_path + "/userLogs/log.txt")
+        # file = open(dir_path + "/userLogs/rizzello/log.txt")
         txt = file.read()
         file.close()
         return txt, 200
@@ -101,8 +106,10 @@ def progressFun():
 def sendPictureFun():
     if checkUser(request):
         body = request.form.keys()[0]
+        # keys = [k for k in request.form.keys()]
+        # body = keys[0]
 
-        # for some reason the server doesn't receive + sings correctly
+        # for some reason the server doesn't receive + signs correctly
         # which is why I translate them to ')' and back to '+'
         # when sending data back and forth
         body = body.translate(
@@ -160,9 +167,9 @@ def sendPictureFun():
 
         file = open(dir_path + "/" + username + "/config/" + datasetName + ".cfg", "w")
         file.write("dataset_name = \'" + datasetName + "\'\n")
-        file.write("root = \'/cvlabdata1/home/rizzello/ccboost-service\'\n")
-        file.write("stack = \'/cvlabdata1/home/rizzello/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
-        file.write("labels = \'/cvlabdata1/home/rizzello/userInput/" + username + "/" + datasetName + "/labels.h5\'\n")
+        file.write("root = \'" + curr_path + "/ccboost-service\'\n")
+        file.write("stack = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
+        file.write("labels = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/labels.h5\'\n")
         file.write("model_name = " + modelName + "\n")
         file.write("num_adaboost_stumps = 2000\n")
         file.close()
