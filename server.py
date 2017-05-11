@@ -92,9 +92,8 @@ def loginFun():
 def progressFun():
     dir_path = os.path.dirname(os.path.realpath(__file__))
     try:
-        request.headers['username']
-        file = open(dir_path + "/userLogs/log.txt")
-        # file = open(dir_path + "/userLogs/rizzello/log.txt")
+        username = request.headers['username']
+        file = open(dir_path + "/userLogs/" + username + "/log.txt")
         txt = file.read()
         file.close()
         return txt, 200
@@ -174,8 +173,7 @@ def sendPictureFun():
         file.write("num_adaboost_stumps = 2000\n")
         file.close()
 
-        # logPath = os.getcwd() + "/userLogs/" + username
-        logPath = os.getcwd() + "/userLogs/"
+        logPath = os.getcwd() + "/userLogs/" + username
         if not os.path.isdir(logPath):
             os.makedirs(logPath)
         logPath = logPath + "log.txt"
