@@ -1,24 +1,29 @@
+from __future__ import print_function
 from flask import Flask, request, render_template
 from flask_restful import Resource, Api
-# from PIL import Image
 from datetime import datetime
 import numpy as np
-# import json
 import base64
 import os
 import h5py
-# import zlib
 import string
 import ssl
 import csv
-import bcrypt
 import subprocess
 import sys
+from passlib.hash import sha256_crypt
+# import json
+# from PIL import Image
+# import zlib
+
+# Set workspace folder to that holding the current file
+# Services should be symlinked inside here
+curr_path = os.path.dirname(os.path.realpath(__file__))
 
 if sys.version_info[0] < 3:
-    from cStringIO import StringIO
+    from cStringIO import StringIO as StringBytesIO
 else:
-    from io import StringIO
+    from io import BytesIO as StringBytesIO
 
 context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
 context.load_cert_chain('server.crt', 'server.key')
@@ -45,16 +50,12 @@ def checkUser(request):
         return False
     with open('users.csv') as csvfile:
         reader = csv.reader(csvfile)
-        # reader = list(reader)
         entry = [line for line in reader if line[0] == username]
         if len(entry) != 0:
             hashed_password = entry[0][1]
-            salt = entry[0][2]
-
-            # hash password sent by client and compare
-            combo_password = password.encode('utf-8') + salt
-            new_hashed_password = bcrypt.hashpw(combo_password, salt)
-            return hashed_password == new_hashed_password
+            return sha256_crypt.verify(
+                password,
+                hashed_password)
 
         # user not in database
         else:
@@ -78,7 +79,7 @@ def loginFun():
         # return np array of format [[dataset1,dataset2...],[modelA, modelB...]]
         # Ilastik slots are np arrays and returning this in that format makes things simpler
         # toReturn = np.array([dataList, modelsList])
-        f = StringIO()
+        f = StringBytesIO()
         np.savez(f, data=dataList, models=modelList)
         f.seek(0)
         payload = f.read()
@@ -114,7 +115,7 @@ def progressFun():
     dir_path = os.path.dirname(os.path.realpath(__file__))
     try:
         username = request.headers['username']
-        file = open(dir_path + "/userLogs/"+username+"/log.txt")
+        file = open(dir_path + "/userLogs/" + username + "/log.txt")
         txt = file.read()
         file.close()
         return txt, 200
@@ -126,8 +127,10 @@ def progressFun():
 def trainFun():
     if checkUser(request):
         body = request.form.keys()[0]
+        # keys = [k for k in request.form.keys()]
+        # body = keys[0]
 
-        # for some reason the server doesn't receive + sings correctly
+        # for some reason the server doesn't receive + signs correctly
         # which is why I translate them to ')' and back to '+'
         # when sending data back and forth
         body = body.translate(
@@ -140,11 +143,11 @@ def trainFun():
         bodyClear = base64.b64decode(body)
 
         # get needed data from request
-        labels = np.load(StringIO(bodyClear))['labels']
-        image = np.load(StringIO(bodyClear))['image']
+        labels = np.load(StringBytesIO(bodyClear))['labels']
+        image = np.load(StringBytesIO(bodyClear))['image']
         username = request.headers['username']
         datasetName = request.headers['datasetName']
-	modelName = request.headers['modelName']
+        modelName = request.headers['modelName']
 
         # save labels and data in h5 format
         inputDirectory = os.getcwd() + '/userInput/' + username + "/" + datasetName + "/"
@@ -185,9 +188,9 @@ def trainFun():
 
         file = open(dir_path + "/" + username + "/config/" + datasetName + ".cfg", "w")
         file.write("dataset_name = \'" + datasetName + "\'\n")
-        file.write("root = \'/cvlabdata1/home/rizzello/ccboost-service\'\n")
-        file.write("stack = \'/cvlabdata1/home/rizzello/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
-        file.write("labels = \'/cvlabdata1/home/rizzello/userInput/" + username + "/" + datasetName + "/labels.h5\'\n")
+        file.write("root = \'" + curr_path + "/ccboost-service\'\n")
+        file.write("stack = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
+        file.write("labels = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/labels.h5\'\n")
         file.write("model_name = " + modelName + "\n")
         file.write("num_adaboost_stumps = 2000\n")
         file.close()
@@ -233,7 +236,7 @@ def trainFun():
              data.shape[2],
              1))
 
-        f = StringIO()
+        f = StringBytesIO()
         np.savez_compressed(f, image=data)
         f.seek(0)
         compressed_data = f.read()

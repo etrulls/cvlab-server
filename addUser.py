@@ -1,40 +1,32 @@
 import csv
-import bcrypt
-# from getpass import getpass
 import sys
+from passlib.hash import sha256_crypt
+import os
 
-# username = 'rizzello'
-# raw_password = '1234'
-username = 'eduard'
-raw_password = '5678'
+users = [
+    {'username': 'rizzello', 'password': '1234'},
+    {'username': 'eduard', 'password': '5678'}
+]
 
-# salt and hash password
-salt = bcrypt.gensalt()
-if sys.version_info[0] < 3:
-    combo_password = raw_password + salt
-    hashed_password = bcrypt.hashpw(combo_password, salt)
-else:
-    combo_password = raw_password + salt.decode('utf-8')
-    hashed_password = bcrypt.hashpw(combo_password.encode('utf-8'), salt)
+do_header = False
+if not os.path.isfile('users.csv'):
+    do_header = True
 
 with open('users.csv', 'a') as csvfile:
-    fieldnames = ['username', 'password', 'salt']
+    fieldnames = ['username', 'password']
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-    # writer.writeheader() #used only once (when first creating the CSV)
-    writer.writerow(
-        {
-            'username': username,
-            'password': hashed_password,
-            'salt': salt
-        }
-    )
+    # Add header the first time the file is created
+    if do_header:
+        writer.writeheader()
 
+    for u in users:
+        # Generate new salt, hash password
+        password_hash = sha256_crypt.hash(u['password'])
 
-"""
-#example of how to read all rows
-with open('names.csv') as csvfile:
-    reader = csv.DictReader(csvfile)
-    for row in reader:
-        print(row['username'], row['password'])
-"""
+        writer.writerow(
+            {
+                'username': u['username'],
+                'password': password_hash
+            }
+        )
