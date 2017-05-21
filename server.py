@@ -101,7 +101,7 @@ def downloadFun():
 				"/data.h5",
 				driver=None)
         	data = h5['data']
-        	f = StringIO()
+        	f = StringBytesIO()
         	np.savez_compressed(f, data=data)
         	f.seek(0)
         	compressed_data = f.read()
@@ -200,7 +200,7 @@ def trainFun():
             os.makedirs(logPath)
         logPath = logPath + "/log.txt"
 	file = open(logPath, "w")
-	file.write("starting processing")
+	file.write("starting processing \n")
 	file.close()
         p = subprocess.Popen(
             ["python",
@@ -210,10 +210,9 @@ def trainFun():
              "--username",
              username], stdout=subprocess.PIPE, bufsize=1)
         for line in iter(p.stdout.readline, b''):
-            print line,
-            #file = open(logPath, "a")
-            #file.write(line)
-            #file.close(),
+            	file = open(logPath, "a")
+            	file.write(line)
+            	file.close(),
         p.stdout.close()
         p.wait()
 
@@ -235,13 +234,15 @@ def trainFun():
              data.shape[1],
              data.shape[2],
              1))
+	h5.close()
 
         f = StringBytesIO()
-        np.savez_compressed(f, image=data)
+        np.savez_compressed(f, result=data)
         f.seek(0)
         compressed_data = f.read()
         # compressedData64 = base64.b64encode(compressed_data)
-
+	
+	os.remove(logPath)
         return compressed_data, 200
     else:
         # this shouldn't happen since the user can't send data before succesfully logging in
@@ -266,7 +267,7 @@ def testNewFun():
         bodyClear = base64.b64decode(body)
 
         # get needed data from request
-        image = np.load(StringIO(bodyClear))['image']
+        image = np.load(StringBytesIO(bodyClear))['image']
         username = request.headers['username']
         datasetName = request.headers['datasetName']
 	modelName = request.headers['modelName']
@@ -298,7 +299,7 @@ def testNewFun():
         file.write("root = \'/cvlabdata1/home/rizzello/ccboost-service\'\n")
 	file.write("dataset_name = \'" + datasetName + "\'\n")
         file.write("stack = \'/cvlabdata1/home/rizzello/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
-        file.write("model_name = " + modelName + "\n")
+	file.write("model_name = " + modelName + "\n")
         file.write("num_adaboost_stumps = 2000\n")
         file.close()
 
@@ -307,7 +308,7 @@ def testNewFun():
             os.makedirs(logPath)
         logPath = logPath + "/log.txt"
 	file = open(logPath, "w")
-	file.write("starting processing")
+	file.write("starting processing \n")
 	file.close()
         p = subprocess.Popen(
             ["python",
@@ -317,10 +318,9 @@ def testNewFun():
              "--username",
              username], stdout=subprocess.PIPE, bufsize=1)
         for line in iter(p.stdout.readline, b''):
-            print line,
-            #file = open(logPath, "a")
-            #file.write(line)
-            #file.close(),
+            file = open(logPath, "a")
+            file.write(line)
+            file.close(),
         p.stdout.close()
         p.wait()
 
@@ -342,13 +342,111 @@ def testNewFun():
              data.shape[1],
              data.shape[2],
              1))
+	h5.close()
 
-        f = StringIO()
-        np.savez_compressed(f, image=data)
+        f = StringBytesIO()
+        np.savez_compressed(f, result=data)
         f.seek(0)
         compressed_data = f.read()
         # compressedData64 = base64.b64encode(compressed_data)
 
+	os.remove(logPath)
+        return compressed_data, 200
+    else:
+        # this shouldn't happen since the user can't send data before succesfully logging in
+        return '', 401
+
+
+
+@app.route('/api/testOldData', methods=['GET'])
+def testOldFun():
+    if checkUser(request):
+        username = request.headers['username']
+        datasetName = request.headers['datasetName']
+	modelName = request.headers['modelName']
+
+        dir_path = os.getcwd() + "/ccboost-service/workspace"
+
+        # write cfg file based on request
+        if not os.path.isdir(dir_path + "/" + username + "/config"):
+            os.makedirs(dir_path + "/" + username + "/config")
+
+        file = open(dir_path + "/" + username + "/config/" + datasetName + ".cfg", "w")
+        file.write("root = \'/cvlabdata1/home/rizzello/ccboost-service\'\n")
+	file.write("dataset_name = \'" + datasetName + "\'\n")
+        file.write("stack = \'/cvlabdata1/home/rizzello/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
+	file.write("model_name = " + modelName + "\n")
+        file.write("num_adaboost_stumps = 2000\n")
+        file.close()
+
+        logPath = os.getcwd() + "/userLogs/" + username
+        if not os.path.isdir(logPath):
+            os.makedirs(logPath)
+        logPath = logPath + "/log.txt"
+	file = open(logPath, "w")
+	file.write("starting processing \n")
+	file.close()
+        p = subprocess.Popen(
+            ["python",
+             "ccboost-service/handler.py",
+             "--test",
+             dir_path + "/" + username + "/config/" + datasetName + ".cfg",
+             "--username",
+             username], stdout=subprocess.PIPE, bufsize=1)
+        for line in iter(p.stdout.readline, b''):
+            file = open(logPath, "a")
+            file.write(line)
+            file.close(),
+        p.stdout.close()
+        p.wait()
+
+        # fetch result and send it back
+        h5 = h5py.File(
+            dir_path +
+            "/" +
+            username +
+            "/runs/" +
+            datasetName +
+            "/results/" +
+            modelName +
+            "/out-0-ab-max.h5",
+            driver=None)
+        data = h5['data']
+        data = np.reshape(
+            data,
+            (data.shape[0],
+             data.shape[1],
+             data.shape[2],
+             1))
+	h5.close()
+
+
+	h5 = h5py.File(
+		os.getcwd()+
+		"/userInput/"+
+		username+
+		"/"+
+		datasetName+
+		"/data.h5",
+            	driver=None)
+        image = h5['data']
+        image = np.reshape(
+            image,
+            (image.shape[0],
+             image.shape[1],
+             image.shape[2],
+             1))
+	h5.close()
+
+
+        f = StringBytesIO()
+        np.savez_compressed(f, image=image, result=data)
+        f.seek(0)
+        compressed_data = f.read()
+        # compressedData64 = base64.b64encode(compressed_data)
+
+
+	os.remove(logPath)
         return compressed_data, 200
     else:
         # this shouldn't happen since the user can't send data before succesfully logging in
