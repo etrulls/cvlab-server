@@ -20,6 +20,7 @@ from passlib.hash import sha256_crypt
 # Services should be symlinked inside here
 curr_path = os.path.dirname(os.path.realpath(__file__))
 
+
 if sys.version_info[0] < 3:
     from cStringIO import StringIO as StringBytesIO
 else:
@@ -298,9 +299,9 @@ def testNewFun():
             os.makedirs(dir_path + "/" + username + "/config")
 
         file = open(dir_path + "/" + username + "/config/" + datasetName + ".cfg", "w")
-        file.write("root = \'/cvlabdata1/home/rizzello/ccboost-service\'\n")
+        file.write("root = \'' + curr_path + '/ccboost-service\'\n".format(curr_path))
         file.write("dataset_name = \'" + datasetName + "\'\n")
-        file.write("stack = \'/cvlabdata1/home/rizzello/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
+        file.write("stack = \'' + curr_path + '/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
         file.write("model_name = " + modelName + "\n")
         file.write("num_adaboost_stumps = 2000\n")
         file.close()
@@ -373,9 +374,9 @@ def testOldFun():
             os.makedirs(dir_path + "/" + username + "/config")
 
         file = open(dir_path + "/" + username + "/config/" + datasetName + ".cfg", "w")
-        file.write("root = \'/cvlabdata1/home/rizzello/ccboost-service\'\n")
+        file.write("root = \'' + curr_path + '/ccboost-service\'\n")
         file.write("dataset_name = \'" + datasetName + "\'\n")
-        file.write("stack = \'/cvlabdata1/home/rizzello/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
+        file.write("stack = \'' + curr_path + '/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
         file.write("model_name = " + modelName + "\n")
         file.write("num_adaboost_stumps = 2000\n")
         file.close()
