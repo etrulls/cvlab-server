@@ -88,6 +88,20 @@ def loginFun():
     else:
         return '', 401
 
+@app.route('/api/deleteDataset', methods=['GET'])
+def delDatasetFun():
+    if checkUser(request):
+	username = request.headers['username'].encode('ascii','ignore')
+	datasetName = request.headers['dataset_name'].encode('ascii','ignore')
+	if str.isalnum(datasetName) and str.isalnum(username): #username check might be redundant, but better safe than sorry.
+		subprocess.call(["rm","-rf",curr_path+"/userInput/"+username+"/"+datasetName])
+		subprocess.call(["rm","-rf", curr_path+"/ccboost-service/workspace/"+username+"/runs/"+ datasetName])
+		return '', 200
+	else:
+		return 'user or dataset name contains illegal characters',400
+    else:
+	return '', 401
+
 
 @app.route('/api/downloadDataset', methods=['GET'])
 def downloadFun():
@@ -299,9 +313,9 @@ def testNewFun():
             os.makedirs(dir_path + "/" + username + "/config")
 
         file = open(dir_path + "/" + username + "/config/" + datasetName + ".cfg", "w")
-        file.write("root = \'' + curr_path + '/ccboost-service\'\n".format(curr_path))
+        file.write("root = \'" + curr_path + "/ccboost-service\'\n")
         file.write("dataset_name = \'" + datasetName + "\'\n")
-        file.write("stack = \'' + curr_path + '/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
+        file.write("stack = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
         file.write("model_name = " + modelName + "\n")
         file.write("num_adaboost_stumps = 2000\n")
         file.close()
@@ -374,9 +388,9 @@ def testOldFun():
             os.makedirs(dir_path + "/" + username + "/config")
 
         file = open(dir_path + "/" + username + "/config/" + datasetName + ".cfg", "w")
-        file.write("root = \'' + curr_path + '/ccboost-service\'\n")
+        file.write("root = \'" + curr_path + "/ccboost-service\'\n")
         file.write("dataset_name = \'" + datasetName + "\'\n")
-        file.write("stack = \'' + curr_path + '/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
+        file.write("stack = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
         file.write("model_name = " + modelName + "\n")
         file.write("num_adaboost_stumps = 2000\n")
         file.close()
@@ -453,4 +467,4 @@ def testOldFun():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=7171, ssl_context=context, threaded=True)
+    app.run(host='0.0.0.0', port=7170, ssl_context=context, threaded=True)
