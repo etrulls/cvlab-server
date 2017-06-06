@@ -91,16 +91,16 @@ def loginFun():
 @app.route('/api/deleteDataset', methods=['GET'])
 def delDatasetFun():
     if checkUser(request):
-	username = request.headers['username'].encode('ascii','ignore')
-	datasetName = request.headers['dataset_name'].encode('ascii','ignore')
-	if str.isalnum(datasetName) and str.isalnum(username): #username check might be redundant, but better safe than sorry.
-		subprocess.call(["rm","-rf",curr_path+"/userInput/"+username+"/"+datasetName])
-		subprocess.call(["rm","-rf", curr_path+"/ccboost-service/workspace/"+username+"/runs/"+ datasetName])
-		return '', 200
-	else:
-		return 'user or dataset name contains illegal characters',400
+        username = request.headers['username'].encode('ascii','ignore')
+        datasetName = request.headers['dataset_name'].encode('ascii','ignore')
+        if str.isalnum(datasetName) and str.isalnum(username): #username check might be redundant, but better safe than sorry.
+            subprocess.call(["rm","-rf",curr_path+"/userInput/"+username+"/"+datasetName])
+            subprocess.call(["rm","-rf", curr_path+"/ccboost-service/workspace/"+username+"/runs/"+ datasetName])
+            return '', 200
+        else:
+            return 'user or dataset name contains illegal characters',400
     else:
-	return '', 401
+        return '', 401
 
 
 @app.route('/api/downloadDataset', methods=['GET'])
