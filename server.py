@@ -12,6 +12,7 @@ import csv
 import subprocess
 import sys
 from passlib.hash import sha256_crypt
+import argparse
 # import json
 # from PIL import Image
 # import zlib
@@ -467,4 +468,14 @@ def testOldFun():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=7170, ssl_context=context, threaded=True)
+    # Command-line arguments
+    parser = argparse.ArgumentParser(description='CVLAB server')
+    parser.add_argument(
+        '--port',
+        type=int,
+        help='Server port',
+        default=7170)
+    params = parser.parse_args()
+
+    # Run flask
+    app.run(host='0.0.0.0', port=params.port, ssl_context=context, threaded=True)
