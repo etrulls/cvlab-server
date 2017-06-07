@@ -226,7 +226,7 @@ def trainFun():
              "--train",
              dir_path + "/" + username + "/config/" + datasetName + ".cfg",
              "--username",
-             username], stdout=subprocess.PIPE, bufsize=1)
+             username], stdout=subprocess.PIPE, stderr=sys.stdout.fileno(), bufsize=1)
         for line in iter(p.stdout.readline, b''):
             file = open(logPath, "a")
             file.write(line)
@@ -325,8 +325,10 @@ def testNewFun():
         if not os.path.isdir(logPath):
             os.makedirs(logPath)
         logPath = logPath + "/log.txt"
+        if os.path.isfile(logPath):
+            os.remove(logPath)
         file = open(logPath, "w")
-        file.write("starting processing \n")
+        file.write(">> Starting CCBOOST service\n")
         file.close()
         p = subprocess.Popen(
             ["python",
