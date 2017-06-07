@@ -325,8 +325,8 @@ def testNewFun():
         if not os.path.isdir(logPath):
             os.makedirs(logPath)
         logPath = logPath + "/log.txt"
-        if os.path.isfile(logPath):
-            os.remove(logPath)
+        # if os.path.isfile(logPath):
+        #     os.remove(logPath)
         file = open(logPath, "w")
         file.write(">> Starting CCBOOST service\n")
         file.close()
