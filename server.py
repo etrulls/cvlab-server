@@ -12,6 +12,7 @@ import csv
 import subprocess
 import sys
 from passlib.hash import sha256_crypt
+import argparse
 # import json
 # from PIL import Image
 # import zlib
@@ -91,16 +92,16 @@ def loginFun():
 @app.route('/api/deleteDataset', methods=['GET'])
 def delDatasetFun():
     if checkUser(request):
-	username = request.headers['username'].encode('ascii','ignore')
-	datasetName = request.headers['dataset_name'].encode('ascii','ignore')
-	if str.isalnum(datasetName) and str.isalnum(username): #username check might be redundant, but better safe than sorry.
-		subprocess.call(["rm","-rf",curr_path+"/userInput/"+username+"/"+datasetName])
-		subprocess.call(["rm","-rf", curr_path+"/ccboost-service/workspace/"+username+"/runs/"+ datasetName])
-		return '', 200
-	else:
-		return 'user or dataset name contains illegal characters',400
+        username = request.headers['username'].encode('ascii','ignore')
+        datasetName = request.headers['dataset_name'].encode('ascii','ignore')
+        if str.isalnum(datasetName) and str.isalnum(username): #username check might be redundant, but better safe than sorry.
+            subprocess.call(["rm","-rf",curr_path+"/userInput/"+username+"/"+datasetName])
+            subprocess.call(["rm","-rf", curr_path+"/ccboost-service/workspace/"+username+"/runs/"+ datasetName])
+            return '', 200
+        else:
+            return 'user or dataset name contains illegal characters',400
     else:
-	return '', 401
+        return '', 401
 
 
 @app.route('/api/downloadDataset', methods=['GET'])
@@ -225,7 +226,7 @@ def trainFun():
              "--train",
              dir_path + "/" + username + "/config/" + datasetName + ".cfg",
              "--username",
-             username], stdout=subprocess.PIPE, bufsize=1)
+             username], stdout=subprocess.PIPE, stderr=sys.stdout.fileno(), bufsize=1)
         for line in iter(p.stdout.readline, b''):
             file = open(logPath, "a")
             file.write(line)
@@ -324,8 +325,10 @@ def testNewFun():
         if not os.path.isdir(logPath):
             os.makedirs(logPath)
         logPath = logPath + "/log.txt"
+        # if os.path.isfile(logPath):
+        #     os.remove(logPath)
         file = open(logPath, "w")
-        file.write("starting processing \n")
+        file.write(">> Starting CCBOOST service\n")
         file.close()
         p = subprocess.Popen(
             ["python",
@@ -467,4 +470,15 @@ def testOldFun():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=7171, ssl_context=context, threaded=True)
+    # Command-line arguments
+    parser = argparse.ArgumentParser(description='CVLAB server')
+    parser.add_argument(
+        '--port',
+        type=int,
+        help='Server port',
+        default=7170)
+    params = parser.parse_args()
+
+    # Run flask
+    app.run(host='0.0.0.0', port=params.port, ssl_context=context, threaded=True)
+
