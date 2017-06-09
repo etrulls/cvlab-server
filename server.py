@@ -104,6 +104,20 @@ def delDatasetFun():
         return '', 401
 
 
+@app.route('/api/deleteModel', methods=['GET'])
+def delModelFun():
+    if checkUser(request):
+        username = request.headers['username'].encode('ascii','ignore')
+       	modelName = request.headers['model_name'].encode('ascii','ignore')
+        if str.isalnum(modelName) and str.isalnum(username): #username check might be redundant, but better safe than sorry.
+            subprocess.call(["rm","-rf", curr_path+"/ccboost-service/workspace/"+username+"/models/"+ modelName])
+            return '', 200
+        else:
+            return 'user or dataset name contains illegal characters',400
+    else:
+        return '', 401
+
+
 @app.route('/api/downloadDataset', methods=['GET'])
 def downloadFun():
     if checkUser(request):
@@ -166,6 +180,10 @@ def trainFun():
         username = request.headers['username']
         datasetName = request.headers['datasetName']
         modelName = request.headers['modelName']
+	mirror = request.headers['mirror']
+	numStumps = request.headers['numStumps']
+	insidePixel = request.headers['insidePixel']
+	outsidePixel = request.headers['outsidePixel']
 
         # save labels and data in h5 format
         inputDirectory = os.getcwd() + '/userInput/' + username + "/" + datasetName + "/"
@@ -210,7 +228,9 @@ def trainFun():
         file.write("stack = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
         file.write("labels = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/labels.h5\'\n")
         file.write("model_name = " + modelName + "\n")
-        file.write("num_adaboost_stumps = 2000\n")
+        file.write("num_adaboost_stumps = "+ numStumps +"\n")
+	file.write("mirror = "+mirror+"\n")
+	file.write("ignore = "+insidePixel+", "+outsidePixel)
         file.close()
 
         logPath = os.getcwd() + "/userLogs/" + username
@@ -289,6 +309,7 @@ def testNewFun():
         username = request.headers['username']
         datasetName = request.headers['datasetName']
         modelName = request.headers['modelName']
+	mirror = request.headers['mirror']
 
         # save data in h5 format
         inputDirectory = os.getcwd() + '/userInput/' + username + "/" + datasetName + "/"
@@ -319,6 +340,7 @@ def testNewFun():
         file.write("stack = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
         file.write("model_name = " + modelName + "\n")
         file.write("num_adaboost_stumps = 2000\n")
+	file.write("mirror = "+mirror+"\n")
         file.close()
 
         logPath = os.getcwd() + "/userLogs/" + username
@@ -383,6 +405,7 @@ def testOldFun():
         username = request.headers['username']
         datasetName = request.headers['datasetName']
         modelName = request.headers['modelName']
+	mirror = request.headers['mirror']
 
         dir_path = os.getcwd() + "/ccboost-service/workspace"
 
@@ -396,6 +419,7 @@ def testOldFun():
         file.write("stack = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
         file.write("model_name = " + modelName + "\n")
         file.write("num_adaboost_stumps = 2000\n")
+	file.write("mirror = "+mirror+"\n")
         file.close()
 
         logPath = os.getcwd() + "/userLogs/" + username
@@ -476,7 +500,7 @@ if __name__ == '__main__':
         '--port',
         type=int,
         help='Server port',
-        default=7170)
+        default=7171)
     params = parser.parse_args()
 
     # Run flask
