@@ -46,8 +46,8 @@ def getImmediateSubdirectories(path):
 
 def checkUser(request):
     try:
-        username = request.headers['username']
-        password = request.headers['password']
+        username = request.headers['Username']
+        password = request.headers['Password']
     except:
         return False
     with open('users.csv') as csvfile:
@@ -67,7 +67,7 @@ def checkUser(request):
 @app.route('/api/login', methods=['GET'])
 def loginFun():
     if checkUser(request):
-        username = request.headers['username']
+        username = request.headers['Username']
         modelsPath = os.getcwd() + "/ccboost-service/workspace/" + username + "/models"  # Note : For now there is only service, future work might add more services than just ccboost
         # for example the user would choose the service he wants to use before logging in
         if not os.path.isdir(modelsPath):
@@ -92,8 +92,8 @@ def loginFun():
 @app.route('/api/deleteDataset', methods=['GET'])
 def delDatasetFun():
     if checkUser(request):
-        username = request.headers['username'].encode('ascii','ignore')
-        datasetName = request.headers['dataset_name'].encode('ascii','ignore')
+        username = request.headers['Username'].encode('ascii','ignore')
+        datasetName = request.headers['Dataset-Name'].encode('ascii','ignore')
         if str.isalnum(datasetName) and str.isalnum(username): #username check might be redundant, but better safe than sorry.
             subprocess.call(["rm","-rf",curr_path+"/userInput/"+username+"/"+datasetName])
             subprocess.call(["rm","-rf", curr_path+"/ccboost-service/workspace/"+username+"/runs/"+ datasetName])
@@ -107,8 +107,8 @@ def delDatasetFun():
 @app.route('/api/deleteModel', methods=['GET'])
 def delModelFun():
     if checkUser(request):
-        username = request.headers['username'].encode('ascii','ignore')
-       	modelName = request.headers['model_name'].encode('ascii','ignore')
+        username = request.headers['Username'].encode('ascii','ignore')
+       	modelName = request.headers['Model-Name'].encode('ascii','ignore')
         if str.isalnum(modelName) and str.isalnum(username): #username check might be redundant, but better safe than sorry.
             subprocess.call(["rm","-rf", curr_path+"/ccboost-service/workspace/"+username+"/models/"+ modelName])
             return '', 200
@@ -122,8 +122,8 @@ def delModelFun():
 def downloadFun():
     if checkUser(request):
         dir_path = os.path.dirname(os.path.realpath(__file__))
-        username = request.headers['username']
-        datasetName = request.headers['dataset_name']
+        username = request.headers['Username']
+        datasetName = request.headers['Dataset-Name']
         h5 = h5py.File(
             dir_path +
             "/userInput/" +
@@ -144,15 +144,18 @@ def downloadFun():
 
 @app.route('/api/getProgress', methods=['GET'])
 def progressFun():
-    dir_path = os.path.dirname(os.path.realpath(__file__))
-    try:
-        username = request.headers['username']
-        file = open(dir_path + "/userLogs/" + username + "/log.txt")
-        txt = file.read()
-        file.close()
-        return txt, 200
-    except:
-        return "", 404
+    if checkUser(request):
+    	try:
+        	username = request.headers['Username']
+		password = request.headers['Password']
+		datasetName = request.headers['Dataset-Name']
+		modelName = request.headers['Model-Name']
+        	file = open(curr_path + "/userLogs/" + username + "/"+datasetName+modelName+".txt")
+        	txt = file.read()
+        	file.close()
+        	return txt, 200
+    	except:
+        	return "", 404
 
 
 @app.route('/api/train', methods=['POST'])
@@ -177,13 +180,13 @@ def trainFun():
         # get needed data from request
         labels = np.load(StringBytesIO(bodyClear))['labels']
         image = np.load(StringBytesIO(bodyClear))['image']
-        username = request.headers['username']
-        datasetName = request.headers['datasetName']
-        modelName = request.headers['modelName']
-	mirror = request.headers['mirror']
-	numStumps = request.headers['numStumps']
-	insidePixel = request.headers['insidePixel']
-	outsidePixel = request.headers['outsidePixel']
+        username = request.headers['Username']
+        datasetName = request.headers['Dataset-Name']
+        modelName = request.headers['Model-Name']
+	mirror = request.headers['Mirror']
+	numStumps = request.headers['Num-Stumps']
+	insidePixel = request.headers['Inside-Pixel']
+	outsidePixel = request.headers['Outside-Pixel']
 
         # save labels and data in h5 format
         inputDirectory = os.getcwd() + '/userInput/' + username + "/" + datasetName + "/"
@@ -236,7 +239,7 @@ def trainFun():
         logPath = os.getcwd() + "/userLogs/" + username
         if not os.path.isdir(logPath):
             os.makedirs(logPath)
-        logPath = logPath + "/log.txt"
+        logPath = logPath + "/"+datasetName+modelName+".txt"
         file = open(logPath, "w")
         file.write("starting processing \n")
         file.close()
@@ -306,10 +309,10 @@ def testNewFun():
 
         # get needed data from request
         image = np.load(StringBytesIO(bodyClear))['image']
-        username = request.headers['username']
-        datasetName = request.headers['datasetName']
-        modelName = request.headers['modelName']
-	mirror = request.headers['mirror']
+        username = request.headers['Username']
+        datasetName = request.headers['Dataset-Name']
+        modelName = request.headers['Model-Name']
+	mirror = request.headers['Mirror']
 
         # save data in h5 format
         inputDirectory = os.getcwd() + '/userInput/' + username + "/" + datasetName + "/"
@@ -346,7 +349,7 @@ def testNewFun():
         logPath = os.getcwd() + "/userLogs/" + username
         if not os.path.isdir(logPath):
             os.makedirs(logPath)
-        logPath = logPath + "/log.txt"
+        logPath = logPath + "/"+datasetName+modelName+".txt"
         # if os.path.isfile(logPath):
         #     os.remove(logPath)
         file = open(logPath, "w")
@@ -402,10 +405,10 @@ def testNewFun():
 @app.route('/api/testOldData', methods=['GET'])
 def testOldFun():
     if checkUser(request):
-        username = request.headers['username']
-        datasetName = request.headers['datasetName']
-        modelName = request.headers['modelName']
-	mirror = request.headers['mirror']
+        username = request.headers['Username']
+        datasetName = request.headers['Dataset-Name']
+        modelName = request.headers['Model-Name']
+	mirror = request.headers['Mirror']
 
         dir_path = os.getcwd() + "/ccboost-service/workspace"
 
@@ -425,7 +428,7 @@ def testOldFun():
         logPath = os.getcwd() + "/userLogs/" + username
         if not os.path.isdir(logPath):
             os.makedirs(logPath)
-        logPath = logPath + "/log.txt"
+        logPath = logPath + "/"+datasetName+modelName+".txt"
         file = open(logPath, "w")
         file.write("starting processing \n")
         file.close()
