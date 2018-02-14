@@ -108,7 +108,7 @@ def delDatasetFun():
 def delModelFun():
     if checkUser(request):
         username = request.headers['Username'].encode('ascii','ignore')
-       	modelName = request.headers['Model-Name'].encode('ascii','ignore')
+        modelName = request.headers['Model-Name'].encode('ascii','ignore')
         if str.isalnum(modelName) and str.isalnum(username): #username check might be redundant, but better safe than sorry.
             subprocess.call(["rm","-rf", curr_path+"/ccboost-service/workspace/"+username+"/models/"+ modelName])
             return '', 200
@@ -145,17 +145,17 @@ def downloadFun():
 @app.route('/api/getProgress', methods=['GET'])
 def progressFun():
     if checkUser(request):
-    	try:
-        	username = request.headers['Username']
-		password = request.headers['Password']
-		datasetName = request.headers['Dataset-Name']
-		modelName = request.headers['Model-Name']
-        	file = open(curr_path + "/userLogs/" + username + "/"+datasetName+modelName+".txt")
-        	txt = file.read()
-        	file.close()
-        	return txt, 200
-    	except:
-        	return "", 404
+        try:
+            username = request.headers['Username']
+            password = request.headers['Password']
+            datasetName = request.headers['Dataset-Name']
+            modelName = request.headers['Model-Name']
+            file = open(curr_path + "/userLogs/" + username + "/"+datasetName+modelName+".txt")
+            txt = file.read()
+            file.close()
+            return txt, 200
+        except:
+            return "", 404
 
 
 @app.route('/api/train', methods=['POST'])
@@ -183,10 +183,10 @@ def trainFun():
         username = request.headers['Username']
         datasetName = request.headers['Dataset-Name']
         modelName = request.headers['Model-Name']
-	mirror = request.headers['Mirror']
-	numStumps = request.headers['Num-Stumps']
-	insidePixel = request.headers['Inside-Pixel']
-	outsidePixel = request.headers['Outside-Pixel']
+        mirror = request.headers['Mirror']
+        numStumps = request.headers['Num-Stumps']
+        insidePixel = request.headers['Inside-Pixel']
+        outsidePixel = request.headers['Outside-Pixel']
 
         # save labels and data in h5 format
         inputDirectory = os.getcwd() + '/userInput/' + username + "/" + datasetName + "/"
@@ -232,8 +232,8 @@ def trainFun():
         file.write("labels = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/labels.h5\'\n")
         file.write("model_name = " + modelName + "\n")
         file.write("num_adaboost_stumps = "+ numStumps +"\n")
-	file.write("mirror = "+mirror+"\n")
-	file.write("ignore = "+insidePixel+", "+outsidePixel)
+        file.write("mirror = "+mirror+"\n")
+        file.write("ignore = "+insidePixel+", "+outsidePixel)
         file.close()
 
         logPath = os.getcwd() + "/userLogs/" + username
@@ -243,13 +243,14 @@ def trainFun():
         file = open(logPath, "w")
         file.write("starting processing \n")
         file.close()
-        p = subprocess.Popen(
-            ["python",
-             "ccboost-service/handler.py",
-             "--train",
-             dir_path + "/" + username + "/config/" + datasetName + ".cfg",
-             "--username",
-             username], stdout=subprocess.PIPE, stderr=sys.stdout.fileno(), bufsize=1)
+        cmd = ["python",
+               "ccboost-service/handler.py",
+               "--train",
+               dir_path + "/" + username + "/config/" + datasetName + ".cfg",
+               "--username",
+               username]
+        print("DEBUGGING : {}".format(" ".join(cmd)))
+        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=sys.stdout.fileno(), bufsize=1)
         for line in iter(p.stdout.readline, b''):
             file = open(logPath, "a")
             file.write(line)
@@ -312,7 +313,7 @@ def testNewFun():
         username = request.headers['Username']
         datasetName = request.headers['Dataset-Name']
         modelName = request.headers['Model-Name']
-	mirror = request.headers['Mirror']
+        mirror = request.headers['Mirror']
 
         # save data in h5 format
         inputDirectory = os.getcwd() + '/userInput/' + username + "/" + datasetName + "/"
@@ -408,7 +409,7 @@ def testOldFun():
         username = request.headers['Username']
         datasetName = request.headers['Dataset-Name']
         modelName = request.headers['Model-Name']
-	mirror = request.headers['Mirror']
+        mirror = request.headers['Mirror']
 
         dir_path = os.getcwd() + "/ccboost-service/workspace"
 
@@ -422,7 +423,7 @@ def testOldFun():
         file.write("stack = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
         file.write("model_name = " + modelName + "\n")
         file.write("num_adaboost_stumps = 2000\n")
-	file.write("mirror = "+mirror+"\n")
+        file.write("mirror = "+mirror+"\n")
         file.close()
 
         logPath = os.getcwd() + "/userLogs/" + username
