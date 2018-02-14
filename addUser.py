@@ -5,7 +5,10 @@ import os
 
 users = [
     {'username': 'rizzello', 'password': '1234'},
-    {'username': 'eduard', 'password': '5678'}
+    {'username': 'eduard', 'password': '5678'},
+    {'username': 'tester', 'password': '1234'},
+    {'username': 'catherine', 'password': '1234'},
+    {'username': 'lidia', 'password': 'blazquez'},
 ]
 
 do_header = False

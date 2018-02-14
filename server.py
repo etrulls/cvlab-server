@@ -343,7 +343,7 @@ def testNewFun():
         file.write("stack = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
         file.write("model_name = " + modelName + "\n")
         file.write("num_adaboost_stumps = 2000\n")
-	file.write("mirror = "+mirror+"\n")
+        file.write("mirror = "+mirror+"\n")
         file.close()
 
         logPath = os.getcwd() + "/userLogs/" + username
