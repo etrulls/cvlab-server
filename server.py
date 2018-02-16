@@ -6,35 +6,29 @@ import numpy as np
 import base64
 import os
 import h5py
-import string
 import ssl
 import csv
 import subprocess
 import sys
 from passlib.hash import sha256_crypt
 import argparse
-# import json
-# from PIL import Image
-# import zlib
+from io import BytesIO
+import deepdish as dd
 
-# Set workspace folder to that holding the current file
-# Services should be symlinked inside here
+# Set workspace folder
 curr_path = os.path.dirname(os.path.realpath(__file__))
 
+# Services should be symlinked inside here
+if not os.path.isdir(curr_path + "/ccboost-service"):
+    raise RuntimeError("Cannot find service 'ccboost'. Forgot to symlink?")
 
-if sys.version_info[0] < 3:
-    from cStringIO import StringIO as StringBytesIO
-else:
-    from io import BytesIO as StringBytesIO
-
-context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-context.load_cert_chain('server.crt', 'server.key')
-
+# Create API
 app = Flask(__name__)
 api = Api(app)
 # 1GB
 app.config['MAX_CONTENT_LENGTH'] = 1000000000
 
+# Fix for windows (client side)
 std_base64chars = "+"
 custom_base64chars = ")"
 
@@ -46,8 +40,8 @@ def getImmediateSubdirectories(path):
 
 def checkUser(request):
     try:
-        username = request.headers['Username']
-        password = request.headers['Password']
+        username = request.headers['username']
+        password = request.headers['password']
     except:
         return False
     with open('users.csv') as csvfile:
@@ -64,139 +58,173 @@ def checkUser(request):
             return False
 
 
+# Log in and get list of available services
 @app.route('/api/login', methods=['GET'])
 def loginFun():
+    # Log in and get list of services
     if checkUser(request):
-        username = request.headers['Username']
-        modelsPath = os.getcwd() + "/ccboost-service/workspace/" + username + "/models"  # Note : For now there is only service, future work might add more services than just ccboost
-        # for example the user would choose the service he wants to use before logging in
+        username = request.headers['username']
+        # services currently integrated
+        # services = ['CCboost']
+
+        # ccboost is the only service currently integrated
+        modelsPath = curr_path + "/ccboost-service/workspace/" + username + "/models"
         if not os.path.isdir(modelsPath):
             os.makedirs(modelsPath)
         modelList = getImmediateSubdirectories(modelsPath)
-        dataPath = os.getcwd() + "/userInput/" + username
+        dataPath = curr_path + "/userInput/" + username
         if not os.path.isdir(dataPath):
             os.makedirs(dataPath)
         dataList = getImmediateSubdirectories(dataPath)
 
-        # return np array of format [[dataset1,dataset2...],[modelA, modelB...]]
-        # Ilastik slots are np arrays and returning this in that format makes things simpler
-        # toReturn = np.array([dataList, modelsList])
-        f = StringBytesIO()
+        # return np array of list (Ilastik slots are np arrays)
+        f = BytesIO()
         np.savez(f, data=dataList, models=modelList)
+        # np.savez(f, services=services)
         f.seek(0)
         payload = f.read()
         return payload, 200
     else:
-        return '', 401
+        return 'Not authorized', 401
+
+
+# Get a list of data and trained models
+# @app.route('/api/listDataModels', methods=['GET'])
+# def listFun():
+#     if checkUser(request):
+#         username = request.headers['username']
+#         # service = request.headers['service']
+# 
+#         # ccboost is the only service currently integrated
+#         modelsPath = curr_path + "/ccboost-service/workspace/" + username + "/models"
+#         if not os.path.isdir(modelsPath):
+#             os.makedirs(modelsPath)
+#         modelList = getImmediateSubdirectories(modelsPath)
+#         dataPath = curr_path + "/userInput/" + username
+#         if not os.path.isdir(dataPath):
+#             os.makedirs(dataPath)
+#         dataList = getImmediateSubdirectories(dataPath)
+# 
+#         f = BytesIO()
+#         np.savez(f, data=dataList, models=modelList)
+#         f.seek(0)
+#         payload = f.read()
+#         return payload, 200
+#     else:
+#         return 'Not authorized', 401
+
 
 @app.route('/api/deleteDataset', methods=['GET'])
 def delDatasetFun():
     if checkUser(request):
-        username = request.headers['Username'].encode('ascii','ignore')
-        datasetName = request.headers['Dataset-Name'].encode('ascii','ignore')
-        if str.isalnum(datasetName) and str.isalnum(username): #username check might be redundant, but better safe than sorry.
-            subprocess.call(["rm","-rf",curr_path+"/userInput/"+username+"/"+datasetName])
-            subprocess.call(["rm","-rf", curr_path+"/ccboost-service/workspace/"+username+"/runs/"+ datasetName])
-            return '', 200
+        username = request.headers['username'].encode('ascii', 'ignore')
+        datasetName = request.headers['dataset-name'].encode('ascii', 'ignore')
+        # Username check might be redundant, but better safe than sorry
+        if str.isalnum(datasetName) and str.isalnum(username):
+            subprocess.call(["rm", "-rf", curr_path + "/userInput/" + username + "/" + datasetName])
+            subprocess.call(["rm", "-rf", curr_path + "/ccboost-service/workspace/" + username + "/runs/" + datasetName])
+            return '200 error', 200
         else:
-            return 'user or dataset name contains illegal characters',400
+            return 'User or dataset name contains illegal characters', 400
     else:
-        return '', 401
+        return 'Not authorized', 401
 
 
 @app.route('/api/deleteModel', methods=['GET'])
 def delModelFun():
     if checkUser(request):
-        username = request.headers['Username'].encode('ascii','ignore')
-        modelName = request.headers['Model-Name'].encode('ascii','ignore')
-        if str.isalnum(modelName) and str.isalnum(username): #username check might be redundant, but better safe than sorry.
-            subprocess.call(["rm","-rf", curr_path+"/ccboost-service/workspace/"+username+"/models/"+ modelName])
-            return '', 200
+        username = request.headers['username'].encode('ascii', 'ignore')
+        modelName = request.headers['model-name'].encode('ascii', 'ignore')
+        # Username check might be redundant, but better safe than sorry
+        if str.isalnum(modelName) and str.isalnum(username):
+            subprocess.call(["rm", "-rf", curr_path + "/ccboost-service/workspace/" + username + "/models/" + modelName])
+            return '200 error', 200
         else:
-            return 'user or dataset name contains illegal characters',400
+            return 'User or dataset name contains illegal characters', 400
     else:
-        return '', 401
+        return 'Not authorized', 401
 
 
 @app.route('/api/downloadDataset', methods=['GET'])
 def downloadFun():
     if checkUser(request):
         dir_path = os.path.dirname(os.path.realpath(__file__))
-        username = request.headers['Username']
-        datasetName = request.headers['Dataset-Name']
-        h5 = h5py.File(
-            dir_path +
-            "/userInput/" +
-            username +
-            "/" +
-            datasetName +
-            "/data.h5",
+        username = request.headers['username']
+        datasetName = request.headers['dataset-name']
+        h5 = h5py.File("{}/userInput/{}/{}/data.h5".format(
+            dir_path, username, datasetName),
             driver=None)
         data = h5['data']
-        f = StringBytesIO()
+        f = BytesIO()
         np.savez_compressed(f, data=data)
         f.seek(0)
         compressed_data = f.read()
         return compressed_data, 200
     else:
-        return '', 401
+        return 'Not authorized', 401
 
 
 @app.route('/api/getProgress', methods=['GET'])
 def progressFun():
     if checkUser(request):
         try:
-            username = request.headers['Username']
-            password = request.headers['Password']
-            datasetName = request.headers['Dataset-Name']
-            modelName = request.headers['Model-Name']
-            file = open(curr_path + "/userLogs/" + username + "/"+datasetName+modelName+".txt")
-            txt = file.read()
-            file.close()
+            username = request.headers['username']
+            # password = request.headers['password']
+            datasetName = request.headers['dataset-name']
+            modelName = request.headers['model-name']
+            folder = curr_path + "/userLogs/" + username
+            # print(folder)
+            if not os.path.isdir(folder):
+                os.makedirs(folder)
+            with open(folder + "/" + datasetName + "-" + modelName + ".txt") as f:
+                txt = f.read().encode('utf-8')
+                # print('SENDING OUT "{}"'.format(txt))
             return txt, 200
         except:
-            return "", 404
+            return '404 error', 404
+    else:
+        return 'Not authorized', 401
 
 
 @app.route('/api/train', methods=['POST'])
 def trainFun():
     if checkUser(request):
-        body = request.form.keys()[0]
+        body = list(request.form.keys())[0]
         # keys = [k for k in request.form.keys()]
         # body = keys[0]
 
-        # for some reason the server doesn't receive + signs correctly
-        # which is why I translate them to ')' and back to '+'
-        # when sending data back and forth
-        body = body.translate(
-            string.maketrans(
-                custom_base64chars,
-                std_base64chars))
+        # For some reason the server doesn't receive + signs correctly
+        # We translate them to ')' and then back to '+'
+        # body = body.translate(
+        #     string.maketrans(
+        #         custom_base64chars,
+        #         std_base64chars))
+        body = body.replace(custom_base64chars, std_base64chars)
 
-        # removed during transfer but necessary for padding
+        # Removed during transfer but necessary for padding
         body = body + '=='
         bodyClear = base64.b64decode(body)
 
-        # get needed data from request
-        labels = np.load(StringBytesIO(bodyClear))['labels']
-        image = np.load(StringBytesIO(bodyClear))['image']
-        username = request.headers['Username']
-        datasetName = request.headers['Dataset-Name']
-        modelName = request.headers['Model-Name']
-        mirror = request.headers['Mirror']
-        numStumps = request.headers['Num-Stumps']
-        insidePixel = request.headers['Inside-Pixel']
-        outsidePixel = request.headers['Outside-Pixel']
+        # Get needed data from request
+        labels = np.load(BytesIO(bodyClear))['labels']
+        image = np.load(BytesIO(bodyClear))['image']
+        username = request.headers['username']
+        datasetName = request.headers['dataset-name']
+        modelName = request.headers['model-name']
+        mirror = request.headers['mirror']
+        numStumps = request.headers['num-stumps']
+        insidePixel = request.headers['inside-pixel']
+        outsidePixel = request.headers['outside-pixel']
 
-        # save labels and data in h5 format
-        inputDirectory = os.getcwd() + '/userInput/' + username + "/" + datasetName + "/"
+        # Save labels and data in h5 format
+        inputDirectory = curr_path + '/userInput/' + username + "/" + datasetName + "/"
         if not os.path.isdir(inputDirectory):
             os.makedirs(inputDirectory)
 
-        h5 = h5py.File(inputDirectory + 'data.h5', 'w', driver=None)
+        h5 = h5py.File(inputDirectory + '/data.h5', 'w', driver=None)
+        # Ilastik sends data in shape (x,y,z,1) when image is grayscale
+        # We need (x,y,z)
         if image.shape[3] == 1:
-            # ilastik sends data in shape (x,y,z,1) when image is grayscale
-            # we need (x,y,z)
             image = np.reshape(
                 image,
                 (image.shape[0],
@@ -212,63 +240,56 @@ def trainFun():
                  labels.shape[1],
                  labels.shape[2]))
 
-        # transform labels from ilastik conventions to ccboost ones
+        # Transform labels from ilastik conventions to ours
         # ccboost: (255 = positive, 0 = negative, everything else ignored)
         my_dict = {0: 128, 1: 0, 2: 255}
         labels = np.vectorize(my_dict.get, otypes=[np.uint8])(labels)
         h5.create_dataset('data', data=labels)
         h5.close()
 
-        dir_path = os.getcwd() + "/ccboost-service/workspace"
+        dir_path = curr_path + "/ccboost-service/workspace"
 
         # write cfg file based on request
         if not os.path.isdir(dir_path + "/" + username + "/config"):
             os.makedirs(dir_path + "/" + username + "/config")
 
-        file = open(dir_path + "/" + username + "/config/" + datasetName + ".cfg", "w")
-        file.write("dataset_name = \'" + datasetName + "\'\n")
-        file.write("root = \'" + curr_path + "/ccboost-service\'\n")
-        file.write("stack = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
-        file.write("labels = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/labels.h5\'\n")
-        file.write("model_name = " + modelName + "\n")
-        file.write("num_adaboost_stumps = "+ numStumps +"\n")
-        file.write("mirror = "+mirror+"\n")
-        file.write("ignore = "+insidePixel+", "+outsidePixel)
-        file.close()
+        with open(dir_path + "/" + username + "/config/" + datasetName + ".cfg", "w") as f:
+            f.write("dataset_name = \'" + datasetName + "\'\n")
+            f.write("root = \'" + curr_path + "/ccboost-service\'\n")
+            f.write("stack = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
+            f.write("labels = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/labels.h5\'\n")
+            f.write("model_name = " + modelName + "\n")
+            f.write("num_adaboost_stumps = " + numStumps +"\n")
+            f.write("mirror = " + mirror + "\n")
+            f.write("ignore = " + insidePixel + ", " + outsidePixel)
 
-        logPath = os.getcwd() + "/userLogs/" + username
+        logPath = curr_path + "/userLogs/" + username
         if not os.path.isdir(logPath):
             os.makedirs(logPath)
-        logPath = logPath + "/"+datasetName+modelName+".txt"
-        file = open(logPath, "w")
-        file.write("starting processing \n")
-        file.close()
+        logPath = logPath + "/" + datasetName + "-" + modelName + ".txt"
+        f = open(logPath, "w")
+        f.write("starting processing \n")
+        f.close()
         cmd = ["python",
                "ccboost-service/handler.py",
                "--train",
                dir_path + "/" + username + "/config/" + datasetName + ".cfg",
                "--username",
                username]
-        print("DEBUGGING : {}".format(" ".join(cmd)))
+        # print("DEBUGGING : {}".format(" ".join(cmd)))
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=sys.stdout.fileno(), bufsize=1)
         for line in iter(p.stdout.readline, b''):
-            file = open(logPath, "a")
-            file.write(line)
-            file.close(),
+            if verbose:
+                print(line.strip().decode("utf-8"))
+            f = open(logPath, "a")
+            f.write(line.decode("utf-8"))
+            f.close(),
         p.stdout.close()
         p.wait()
 
         # fetch result and send it back
-        h5 = h5py.File(
-            dir_path +
-            "/" +
-            username +
-            "/runs/" +
-            datasetName +
-            "/results/" +
-            modelName +
-            "/out-0-ab-max.h5",
-            driver=None)
+        h5 = h5py.File("{}/{}/runs/{}/results/{}/out-0-ab-max.h5".format(
+            dir_path, username, datasetName, modelName), driver=None)
         data = h5['data']
         data = np.reshape(
             data,
@@ -278,7 +299,7 @@ def trainFun():
              1))
         h5.close()
 
-        f = StringBytesIO()
+        f = BytesIO()
         np.savez_compressed(f, result=data)
         f.seek(0)
         compressed_data = f.read()
@@ -287,75 +308,76 @@ def trainFun():
         os.remove(logPath)
         return compressed_data, 200
     else:
-        # this shouldn't happen since the user can't send data before succesfully logging in
-        return '', 401
+        return 'Not authorized', 401
 
 
 @app.route('/api/testNewData', methods=['POST'])
 def testNewFun():
     if checkUser(request):
-        body = request.form.keys()[0]
+        body = list(request.form.keys())[0]
+        # print(type(body))
+        # dd.io.save("body.h5", {"body": body})
 
-        # for some reason the server doesn't receive + sings correctly
-        # which is why I translate them to ')' and back to '+'
-        # when sending data back and forth
-        body = body.translate(
-            string.maketrans(
-                custom_base64chars,
-                std_base64chars))
+        # Replace ')' with '+'
+        # body = body.translate(
+        #     string.maketrans(
+        #         custom_base64chars,
+        #         std_base64chars))
+        body = body.replace(custom_base64chars, std_base64chars)
 
-        # removed during transfer but necessary for padding
+        # Removed during transfer but necessary for padding
         body = body + '=='
         bodyClear = base64.b64decode(body)
 
-        # get needed data from request
-        image = np.load(StringBytesIO(bodyClear))['image']
-        username = request.headers['Username']
-        datasetName = request.headers['Dataset-Name']
-        modelName = request.headers['Model-Name']
-        mirror = request.headers['Mirror']
+        # Get needed data from request
+        image = np.load(BytesIO(bodyClear))['image']
+        username = request.headers['username']
+        datasetName = request.headers['dataset-name']
+        modelName = request.headers['model-name']
+        mirror = request.headers['mirror']
 
-        # save data in h5 format
-        inputDirectory = os.getcwd() + '/userInput/' + username + "/" + datasetName + "/"
+        # Save data in h5 format
+        inputDirectory = curr_path + '/userInput/' + username + "/" + datasetName + "/"
         if not os.path.isdir(inputDirectory):
             os.makedirs(inputDirectory)
 
         h5 = h5py.File(inputDirectory + 'data.h5', 'w', driver=None)
-        if image.shape[3] == 1:
-            # ilastik sends data in shape (x,y,z,1) when image is grayscale
-            # we need (x,y,z)
-            image = np.reshape(
-                image,
-                (image.shape[0],
-                 image.shape[1],
-                 image.shape[2]))
+        # Ilastik sends data in shape (x,y,z,1) when image is grayscale
+        # We need (x,y,z)
+        if image.ndim == 4:
+            if image.shape[3] == 1:
+                image = np.reshape(
+                    image,
+                    (image.shape[0],
+                     image.shape[1],
+                     image.shape[2]))
         h5.create_dataset('data', data=image)
         h5.close()
 
-        dir_path = os.getcwd() + "/ccboost-service/workspace"
+        dir_path = curr_path + "/ccboost-service/workspace"
 
         # write cfg file based on request
         if not os.path.isdir(dir_path + "/" + username + "/config"):
             os.makedirs(dir_path + "/" + username + "/config")
 
-        file = open(dir_path + "/" + username + "/config/" + datasetName + ".cfg", "w")
-        file.write("root = \'" + curr_path + "/ccboost-service\'\n")
-        file.write("dataset_name = \'" + datasetName + "\'\n")
-        file.write("stack = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
-        file.write("model_name = " + modelName + "\n")
-        file.write("num_adaboost_stumps = 2000\n")
-        file.write("mirror = "+mirror+"\n")
-        file.close()
+        f = open(dir_path + "/" + username + "/config/" + datasetName + ".cfg", "w")
+        f.write("root = \'" + curr_path + "/ccboost-service\'\n")
+        f.write("dataset_name = \'" + datasetName + "\'\n")
+        f.write("stack = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
+        f.write("model_name = " + modelName + "\n")
+        f.write("num_adaboost_stumps = 2000\n")
+        f.write("mirror = " + mirror + "\n")
+        f.close()
 
-        logPath = os.getcwd() + "/userLogs/" + username
+        logPath = curr_path + "/userLogs/" + username
         if not os.path.isdir(logPath):
             os.makedirs(logPath)
-        logPath = logPath + "/"+datasetName+modelName+".txt"
+        logPath = logPath + "/" + datasetName + "-" + modelName + ".txt"
         # if os.path.isfile(logPath):
         #     os.remove(logPath)
-        file = open(logPath, "w")
-        file.write(">> Starting CCBOOST service\n")
-        file.close()
+        f = open(logPath, "w")
+        f.write(">> Starting CCBOOST service\n")
+        f.close()
         p = subprocess.Popen(
             ["python",
              "ccboost-service/handler.py",
@@ -364,9 +386,11 @@ def testNewFun():
              "--username",
              username], stdout=subprocess.PIPE, bufsize=1)
         for line in iter(p.stdout.readline, b''):
-            file = open(logPath, "a")
-            file.write(line)
-            file.close(),
+            if verbose:
+                print(line.strip().decode("utf-8"))
+            f = open(logPath, "a")
+            f.write(line.decode("utf-8"))
+            f.close()
         p.stdout.close()
         p.wait()
 
@@ -390,7 +414,7 @@ def testNewFun():
              1))
         h5.close()
 
-        f = StringBytesIO()
+        f = BytesIO()
         np.savez_compressed(f, result=data)
         f.seek(0)
         compressed_data = f.read()
@@ -399,40 +423,38 @@ def testNewFun():
         os.remove(logPath)
         return compressed_data, 200
     else:
-        # this shouldn't happen since the user can't send data before succesfully logging in
-        return '', 401
+        return 'Not authorized', 401
 
 
 @app.route('/api/testOldData', methods=['GET'])
 def testOldFun():
     if checkUser(request):
-        username = request.headers['Username']
-        datasetName = request.headers['Dataset-Name']
-        modelName = request.headers['Model-Name']
-        mirror = request.headers['Mirror']
+        username = request.headers['username']
+        datasetName = request.headers['dataset-name']
+        modelName = request.headers['model-name']
+        mirror = request.headers['mirror']
 
-        dir_path = os.getcwd() + "/ccboost-service/workspace"
+        dir_path = curr_path + "/ccboost-service/workspace"
 
         # write cfg file based on request
         if not os.path.isdir(dir_path + "/" + username + "/config"):
             os.makedirs(dir_path + "/" + username + "/config")
 
-        file = open(dir_path + "/" + username + "/config/" + datasetName + ".cfg", "w")
-        file.write("root = \'" + curr_path + "/ccboost-service\'\n")
-        file.write("dataset_name = \'" + datasetName + "\'\n")
-        file.write("stack = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
-        file.write("model_name = " + modelName + "\n")
-        file.write("num_adaboost_stumps = 2000\n")
-        file.write("mirror = "+mirror+"\n")
-        file.close()
+        with open(dir_path + "/" + username + "/config/" + datasetName + ".cfg", "w") as f:
+            f.write("root = \'" + curr_path + "/ccboost-service\'\n")
+            f.write("dataset_name = \'" + datasetName + "\'\n")
+            f.write("stack = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
+            f.write("model_name = " + modelName + "\n")
+            f.write("num_adaboost_stumps = 2000\n")
+            f.write("mirror = " + mirror + "\n")
 
-        logPath = os.getcwd() + "/userLogs/" + username
+        logPath = curr_path + "/userLogs/" + username
         if not os.path.isdir(logPath):
             os.makedirs(logPath)
-        logPath = logPath + "/"+datasetName+modelName+".txt"
-        file = open(logPath, "w")
-        file.write("starting processing \n")
-        file.close()
+        logPath = logPath + "/" + datasetName + "-" + modelName + ".txt"
+        f = open(logPath, "w")
+        f.write("starting processing \n")
+        f.close()
         p = subprocess.Popen(
             ["python",
              "ccboost-service/handler.py",
@@ -441,9 +463,11 @@ def testOldFun():
              "--username",
              username], stdout=subprocess.PIPE, bufsize=1)
         for line in iter(p.stdout.readline, b''):
-            file = open(logPath, "a")
-            file.write(line)
-            file.close(),
+            if verbose:
+                print(line.strip().decode("utf-8"))
+            f = open(logPath, "a")
+            f.write(line.decode("utf-8"))
+            f.close(),
         p.stdout.close()
         p.wait()
 
@@ -468,7 +492,7 @@ def testOldFun():
         h5.close()
 
         h5 = h5py.File(
-            os.getcwd() +
+            curr_path +
             "/userInput/" +
             username +
             "/" +
@@ -484,7 +508,7 @@ def testOldFun():
              1))
         h5.close()
 
-        f = StringBytesIO()
+        f = BytesIO()
         np.savez_compressed(f, image=image, result=data)
         f.seek(0)
         compressed_data = f.read()
@@ -493,20 +517,21 @@ def testOldFun():
         os.remove(logPath)
         return compressed_data, 200
     else:
-        # this shouldn't happen since the user can't send data before succesfully logging in
-        return '', 401
+        return 'Not authorized', 401
 
 
 if __name__ == '__main__':
     # Command-line arguments
-    parser = argparse.ArgumentParser(description='CVLAB server')
-    parser.add_argument(
-        '--port',
-        type=int,
-        help='Server port',
-        default=7171)
+    parser = argparse.ArgumentParser(description="CVLAB server")
+    parser.add_argument("--port", type=int, default=7777, help="Port")
+    parser.add_argument("--verbose", dest="verbose", action="store_true")
+    parser.set_defaults(verbose=False)
     params = parser.parse_args()
 
-    # Run flask
-    app.run(host='0.0.0.0', port=params.port, ssl_context=context, threaded=True)
+    global verbose
+    verbose = params.verbose
 
+    # Run flask
+    context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+    context.load_cert_chain('server.crt', 'server.key')
+    app.run(host='0.0.0.0', port=params.port, ssl_context=context, threaded=True)
