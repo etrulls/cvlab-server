@@ -63,6 +63,7 @@ def checkUser(request):
 def loginFun():
     # Log in and get list of services
     if checkUser(request):
+        username = request.headers['username']
         # services currently integrated
         # services = ['CCboost']
 
@@ -78,7 +79,8 @@ def loginFun():
 
         # return np array of list (Ilastik slots are np arrays)
         f = BytesIO()
-        np.savez(f, services=services)
+        np.savez(f, data=dataList, models=modelList)
+        # np.savez(f, services=services)
         f.seek(0)
         payload = f.read()
         return payload, 200
