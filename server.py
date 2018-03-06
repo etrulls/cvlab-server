@@ -79,6 +79,12 @@ def loginFun():
             os.makedirs(dataPath)
         dataList = getImmediateSubdirectories(dataPath)
 
+        # Get dataset size
+        for i in range(len(dataList)):
+            with h5py.File("{}/userInput/{}/{}/data.h5".format(curr_path, username, dataList[i]), 'r') as f:
+                shape = f['data'].shape
+                dataList[i] += " (" + "x".join([str(s) for s in shape]) + ")"
+
         # TODO append the type of service to the model names
         # Retrieve ccboost models
         modelsPath = curr_path + "/ccboost-service/workspace/" + username + "/models"
@@ -524,7 +530,7 @@ def getUsage():
                 cpu_count = psutil.cpu_count()
                 vm = psutil.virtual_memory()
                 mem_perc = vm.percent
-                mem_available = vm.available
+                mem_total = vm.total
 
                 s = 'Server load: {:.1f} ({:d} cores)\nMemory: {:.1f}% ({:.1f} Gb)'.format(
                     cpu_load, cpu_count, mem_perc, mem_available / 1e9)
