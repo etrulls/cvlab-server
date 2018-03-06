@@ -532,7 +532,7 @@ def getUsage():
                 mem_perc = vm.percent
                 mem_total = vm.total
 
-                s = 'Server load: {:.1f} ({:d} cores)\nMemory: {:.1f}% ({:.1f} Gb)'.format(
+                s = 'Server load: {:.1f}% ({:d} cores)\nMemory: {:.1f}% (total: {:.1f} Gb)'.format(
                     cpu_load, cpu_count, mem_perc, mem_total / 1e9)
                 return s, 200
             except:
