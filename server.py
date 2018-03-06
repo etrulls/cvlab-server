@@ -533,7 +533,7 @@ def getUsage():
                 mem_total = vm.total
 
                 s = 'Server load: {:.1f} ({:d} cores)\nMemory: {:.1f}% ({:.1f} Gb)'.format(
-                    cpu_load, cpu_count, mem_perc, mem_available / 1e9)
+                    cpu_load, cpu_count, mem_perc, mem_total / 1e9)
                 return s, 200
             except:
                 return 'Server: Could not retrieve', 500
