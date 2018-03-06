@@ -13,7 +13,8 @@ import sys
 from passlib.hash import sha256_crypt
 import argparse
 from io import BytesIO
-import deepdish as dd
+# import deepdish as dd
+import psutil
 
 # Set workspace folder
 curr_path = os.path.dirname(os.path.realpath(__file__))
@@ -64,23 +65,30 @@ def loginFun():
     # Log in and get list of services
     if checkUser(request):
         username = request.headers['username']
-        # services currently integrated
-        # services = ['CCboost']
 
-        # ccboost is the only service currently integrated
-        modelsPath = curr_path + "/ccboost-service/workspace/" + username + "/models"
-        if not os.path.isdir(modelsPath):
-            os.makedirs(modelsPath)
-        modelList = getImmediateSubdirectories(modelsPath)
+        # Services currently integrated
+        # Do not swap the order: ccboost/train is used as the default for the UI
+        services = [
+            'CCboost (train)',
+            'CCboost (test)',
+        ]
+
+        # Retrieve uploaded data
         dataPath = curr_path + "/userInput/" + username
         if not os.path.isdir(dataPath):
             os.makedirs(dataPath)
         dataList = getImmediateSubdirectories(dataPath)
 
-        # return np array of list (Ilastik slots are np arrays)
+        # TODO append the type of service to the model names
+        # Retrieve ccboost models
+        modelsPath = curr_path + "/ccboost-service/workspace/" + username + "/models"
+        if not os.path.isdir(modelsPath):
+            os.makedirs(modelsPath)
+        modelList = getImmediateSubdirectories(modelsPath)
+
+        # Return np array of list (Ilastik slots are np arrays)
         f = BytesIO()
-        np.savez(f, data=dataList, models=modelList)
-        # np.savez(f, services=services)
+        np.savez(f, services=services, data=dataList, models=modelList)
         f.seek(0)
         payload = f.read()
         return payload, 200
@@ -88,80 +96,63 @@ def loginFun():
         return 'Not authorized', 401
 
 
-# Get a list of data and trained models
-# @app.route('/api/listDataModels', methods=['GET'])
-# def listFun():
-#     if checkUser(request):
-#         username = request.headers['username']
-#         # service = request.headers['service']
-# 
-#         # ccboost is the only service currently integrated
-#         modelsPath = curr_path + "/ccboost-service/workspace/" + username + "/models"
-#         if not os.path.isdir(modelsPath):
-#             os.makedirs(modelsPath)
-#         modelList = getImmediateSubdirectories(modelsPath)
-#         dataPath = curr_path + "/userInput/" + username
-#         if not os.path.isdir(dataPath):
-#             os.makedirs(dataPath)
-#         dataList = getImmediateSubdirectories(dataPath)
-# 
-#         f = BytesIO()
-#         np.savez(f, data=dataList, models=modelList)
-#         f.seek(0)
-#         payload = f.read()
-#         return payload, 200
-#     else:
-#         return 'Not authorized', 401
-
-
 @app.route('/api/deleteDataset', methods=['GET'])
 def delDatasetFun():
     if checkUser(request):
-        username = request.headers['username'].encode('ascii', 'ignore')
-        datasetName = request.headers['dataset-name'].encode('ascii', 'ignore')
-        # Username check might be redundant, but better safe than sorry
+        username = request.headers['username']
+        datasetName = request.headers['dataset-name']
+
+        # Better safe than sorry (we are deleting stuff)
         if str.isalnum(datasetName) and str.isalnum(username):
+            # Subprocess calls are better
+            # Server may hang for a bit otherwise and make the client unresponsive
             subprocess.call(["rm", "-rf", curr_path + "/userInput/" + username + "/" + datasetName])
             subprocess.call(["rm", "-rf", curr_path + "/ccboost-service/workspace/" + username + "/runs/" + datasetName])
-            return '200 error', 200
+            # os.system("rm -rf {}/userInput/{}/{}".format(curr_path, username, datasetName))
+            # os.system("rm -rf {}/ccboost-service/workspace/{}/runs/{}".format(curr_path, username, datasetName))
+            return 'Success', 200
         else:
             return 'User or dataset name contains illegal characters', 400
     else:
-        return 'Not authorized', 401
+        return 'Unauthorized', 401
 
 
 @app.route('/api/deleteModel', methods=['GET'])
 def delModelFun():
     if checkUser(request):
-        username = request.headers['username'].encode('ascii', 'ignore')
-        modelName = request.headers['model-name'].encode('ascii', 'ignore')
-        # Username check might be redundant, but better safe than sorry
+        username = request.headers['username']
+        modelName = request.headers['model-name']
+
+        # Better safe than sorry (we are deleting stuff)
         if str.isalnum(modelName) and str.isalnum(username):
             subprocess.call(["rm", "-rf", curr_path + "/ccboost-service/workspace/" + username + "/models/" + modelName])
-            return '200 error', 200
+            return 'Success', 200
         else:
             return 'User or dataset name contains illegal characters', 400
     else:
-        return 'Not authorized', 401
+        return 'Unauthorized', 401
 
 
 @app.route('/api/downloadDataset', methods=['GET'])
 def downloadFun():
     if checkUser(request):
-        dir_path = os.path.dirname(os.path.realpath(__file__))
         username = request.headers['username']
         datasetName = request.headers['dataset-name']
-        h5 = h5py.File("{}/userInput/{}/{}/data.h5".format(
-            dir_path, username, datasetName),
-            driver=None)
-        data = h5['data']
-        f = BytesIO()
-        np.savez_compressed(f, data=data)
-        f.seek(0)
-        compressed_data = f.read()
-        return compressed_data, 200
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+
+        fn ="{}/userInput/{}/{}/data.h5".format(dir_path, username, datasetName)
+        if os.path.isfile(fn):
+            h5 = h5py.File(fn, driver=None)
+            data = h5['data']
+            f = BytesIO()
+            np.savez_compressed(f, data=data)
+            f.seek(0)
+            payload = f.read()
+            return payload, 200
+        else:
+            return 'No such file', 404
     else:
-        return 'Not authorized', 401
+        return 'Unauthorized', 401
 
 
 @app.route('/api/getProgress', methods=['GET'])
@@ -169,21 +160,20 @@ def progressFun():
     if checkUser(request):
         try:
             username = request.headers['username']
-            # password = request.headers['password']
-            datasetName = request.headers['dataset-name']
-            modelName = request.headers['model-name']
+            dataset_name = request.headers['dataset-name']
+            model_name = request.headers['model-name']
             folder = curr_path + "/userLogs/" + username
             # print(folder)
             if not os.path.isdir(folder):
                 os.makedirs(folder)
-            with open(folder + "/" + datasetName + "-" + modelName + ".txt") as f:
+            with open(folder + "/" + dataset_name + "-" + model_name + ".txt") as f:
                 txt = f.read().encode('utf-8')
-                # print('SENDING OUT "{}"'.format(txt))
+                # print('Debugging: "{}"'.format(txt))
             return txt, 200
         except:
-            return '404 error', 404
+            return 'Error opening file', 404
     else:
-        return 'Not authorized', 401
+        return 'Unauthorized', 401
 
 
 @app.route('/api/train', methods=['POST'])
@@ -211,10 +201,10 @@ def trainFun():
         username = request.headers['username']
         datasetName = request.headers['dataset-name']
         modelName = request.headers['model-name']
-        mirror = request.headers['mirror']
-        numStumps = request.headers['num-stumps']
-        insidePixel = request.headers['inside-pixel']
-        outsidePixel = request.headers['outside-pixel']
+        mirror = request.headers['ccboost-mirror']
+        numStumps = request.headers['ccboost-num-stumps']
+        insidePixel = request.headers['ccboost-inside-pixel']
+        outsidePixel = request.headers['ccboost-outside-pixel']
 
         # Save labels and data in h5 format
         inputDirectory = curr_path + '/userInput/' + username + "/" + datasetName + "/"
@@ -267,6 +257,8 @@ def trainFun():
         if not os.path.isdir(logPath):
             os.makedirs(logPath)
         logPath = logPath + "/" + datasetName + "-" + modelName + ".txt"
+        if os.path.isfile(logPath):
+            os.remove(logPath)
         f = open(logPath, "w")
         f.write("starting processing \n")
         f.close()
@@ -305,7 +297,7 @@ def trainFun():
         compressed_data = f.read()
         # compressedData64 = base64.b64encode(compressed_data)
 
-        os.remove(logPath)
+        # os.remove(logPath)
         return compressed_data, 200
     else:
         return 'Not authorized', 401
@@ -334,7 +326,7 @@ def testNewFun():
         username = request.headers['username']
         datasetName = request.headers['dataset-name']
         modelName = request.headers['model-name']
-        mirror = request.headers['mirror']
+        mirror = request.headers['ccboost-mirror']
 
         # Save data in h5 format
         inputDirectory = curr_path + '/userInput/' + username + "/" + datasetName + "/"
@@ -373,8 +365,8 @@ def testNewFun():
         if not os.path.isdir(logPath):
             os.makedirs(logPath)
         logPath = logPath + "/" + datasetName + "-" + modelName + ".txt"
-        # if os.path.isfile(logPath):
-        #     os.remove(logPath)
+        if os.path.isfile(logPath):
+            os.remove(logPath)
         f = open(logPath, "w")
         f.write(">> Starting CCBOOST service\n")
         f.close()
@@ -420,7 +412,7 @@ def testNewFun():
         compressed_data = f.read()
         # compressedData64 = base64.b64encode(compressed_data)
 
-        os.remove(logPath)
+        # os.remove(logPath)
         return compressed_data, 200
     else:
         return 'Not authorized', 401
@@ -432,7 +424,7 @@ def testOldFun():
         username = request.headers['username']
         datasetName = request.headers['dataset-name']
         modelName = request.headers['model-name']
-        mirror = request.headers['mirror']
+        mirror = request.headers['ccboost-mirror']
 
         dir_path = curr_path + "/ccboost-service/workspace"
 
@@ -452,6 +444,8 @@ def testOldFun():
         if not os.path.isdir(logPath):
             os.makedirs(logPath)
         logPath = logPath + "/" + datasetName + "-" + modelName + ".txt"
+        if os.path.isfile(logPath):
+            os.remove(logPath)
         f = open(logPath, "w")
         f.write("starting processing \n")
         f.close()
@@ -514,10 +508,33 @@ def testOldFun():
         compressed_data = f.read()
         # compressedData64 = base64.b64encode(compressed_data)
 
-        os.remove(logPath)
+        # os.remove(logPath)
         return compressed_data, 200
     else:
         return 'Not authorized', 401
+
+
+@app.route('/api/getUsage', methods=['GET'])
+def getUsage():
+    if checkUser(request):
+        try:
+            # Retrieve CPU and memory usage
+            try:
+                cpu_load = psutil.cpu_percent()
+                cpu_count = psutil.cpu_count()
+                vm = psutil.virtual_memory()
+                mem_perc = vm.percent
+                mem_available = vm.available
+
+                s = 'Server load: {:.1f} ({:d} cores)\nMemory: {:.1f}% ({:.1f} Gb)'.format(
+                    cpu_load, cpu_count, mem_perc, mem_available / 1e9)
+                return s, 200
+            except:
+                return 'Server: Could not retrieve', 500
+        except:
+            return 'Error opening file', 404
+    else:
+        return 'Unauthorized', 401
 
 
 if __name__ == '__main__':
