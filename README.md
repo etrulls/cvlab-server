@@ -11,8 +11,9 @@ The server is written in Python 3 using Flask. Please consult `reqs.txt` for a
 list of requirements (probably overtuned, but given for reference). You may
 generate the server credentials with:
 ```
-openssl req -newkey rsa:2048 -nodes -keyout server.key -out server.crt
+openssl req -newkey rsa:2048 -new -nodes -x509 -days 3650 -keyout server.pem -out server.pem
 ```
+and then copy the private key into `server.key` and the public key into `server.crt`.
 
 External services can be written in any language. We currently have:
 * [CCboost component](https://github.com/etrulls/ccboost-service)
