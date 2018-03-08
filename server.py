@@ -218,17 +218,18 @@ def progressFun():
             model_name = request.headers['model-name']
             serviceName = request.headers['service-name']
 
-            if serviceName == 'CCboost (test)':
+            if serviceName in ['CCboost (test)', 'CCboost (test)']:
                 folder = curr_path + "/userLogs/ccboost/" + username
             elif serviceName == 'U-Net GAD mouse (test)':
                 folder = curr_path + "/userLogs/unet/" + username
             else:
-                raise RuntimeError('Unrecognized service')
+                return 'Unrecognized service', 500
 
             # print(folder)
             if not os.path.isdir(folder):
                 os.makedirs(folder)
-            with open(folder + "/" + dataset_name + "-" + model_name + ".txt") as f:
+            logFile = folder + "/" + dataset_name + "-" + model_name + ".txt"
+            with open(logFile) as f:
                 txt = f.read().encode('utf-8')
                 # print('Debugging: "{}"'.format(txt))
             return txt, 200
@@ -265,7 +266,7 @@ def trainFun():
         # Labels are mandatory
         labels = np.load(BytesIO(bodyClear))['labels']
         with h5py.File(inputDirectory + 'labels.h5', 'w', driver=None) as h5:
-            if labels.ndims == 4 and labels.shape[-1] == 1:
+            if labels.ndim == 4 and labels.shape[-1] == 1:
                 labels = labels[:, :, :, 0]
             # Transform labels from ilastik conventions to ours
             # ccboost: (255 = positive, 0 = negative, everything else ignored)
@@ -280,7 +281,7 @@ def trainFun():
             image = np.load(BytesIO(bodyClear))['image']
             with h5py.File(inputDirectory + '/data.h5', 'w', driver=None) as h5:
                 # Ilastik sends grayscale data as (x,y,z,1) -> we need (x,y,z)
-                if image.ndims == 4 and image.shape[-1] == 1:
+                if image.ndim == 4 and image.shape[-1] == 1:
                     image = image[:, :, :, 0]
                 h5.create_dataset('data', data=image)
 
@@ -298,12 +299,14 @@ def trainFun():
         else:
             return 'Cannot train for service "{}"'.format(serviceName), 500
 
-        appendLog(logPath, stamp("Loading data to send it back"))
-
         # fetch result and send it back
-        with h5py.File(out, 'r', driver=None) as h5:
-            result = h5['data'].value
-            result = np.expand_dims(result, axis=3)
+        if os.path.isfile(out):
+            appendLog(logPath, stamp("Loading data to send it back"))
+            with h5py.File(out, 'r', driver=None) as h5:
+                result = h5['data'].value
+                result = np.expand_dims(result, axis=3)
+        else:
+            return "Output file was not generated", 500
 
         f = BytesIO()
         if do_zip:
@@ -346,7 +349,7 @@ def testNewFun():
             elif modelName == 'GadMouseCh2':
                 gadChannel = '2'
             else:
-                raise RuntimeError('Cannot find GAD model')
+                return "Cannot find GAD model", 500
             gpu = int(request.headers['gpu'])
             batchsize = int(request.headers['batchsize'])
 
@@ -369,12 +372,14 @@ def testNewFun():
             out = unet_test(username, datasetName, modelName, gadChannel, gpu, batchsize)
             logPath = curr_path + "/userLogs/unet/" + username + "/" + datasetName + "-" + modelName + ".txt"
 
-        appendLog(logPath, stamp("Loading data to send it back"))
-
         # Fetch result
-        with h5py.File(out, 'r', driver=None) as h5:
-            result = h5['data'].value
-            result = np.expand_dims(result, axis=3)
+        if os.path.isfile(out):
+            appendLog(logPath, stamp("Loading data to send it back"))
+            with h5py.File(out, 'r', driver=None) as h5:
+                result = h5['data'].value
+                result = np.expand_dims(result, axis=3)
+        else:
+            return "Output file was not generated", 500
 
         f = BytesIO()
         if do_zip:
@@ -401,6 +406,7 @@ def testOldFun():
         modelName = request.headers['model-name']
         serviceName = request.headers['service-name']
 
+        # Parameters
         if serviceName == 'CCboost (test)':
             mirror = request.headers['ccboost-mirror']
         elif serviceName == 'U-Net GAD mouse (test)':
@@ -409,10 +415,11 @@ def testOldFun():
             elif modelName == 'GadMouseCh2':
                 gadChannel = '2'
             else:
-                raise RuntimeError('Cannot find GAD model')
+                return "Cannot find GAD model"
             gpu = int(request.headers['gpu'])
             batchsize = int(request.headers['batchsize'])
 
+        # Operate
         if serviceName == 'CCboost (test)':
             out = ccboost_test(username, datasetName, modelName, mirror)
             logPath = curr_path + "/userLogs/ccboost/" + username + "/" + datasetName + "-" + modelName + ".txt"
@@ -420,12 +427,14 @@ def testOldFun():
             out = unet_test(username, datasetName, modelName, gadChannel, gpu, batchsize)
             logPath = curr_path + "/userLogs/unet/" + username + "/" + datasetName + "-" + modelName + ".txt"
 
-        appendLog(logPath, stamp("Loading data to send it back"))
-
         # Fetch result
-        with h5py.File(out, 'r', driver=None) as h5:
-            result = h5['data'].value
-            result = np.expand_dims(result, axis=3)
+        if os.path.isfile(out):
+            appendLog(logPath, stamp("Loading data to send it back"))
+            with h5py.File(out, 'r', driver=None) as h5:
+                result = h5['data'].value
+                result = np.expand_dims(result, axis=3)
+        else:
+            return "Output file was not generated", 500
 
         f = BytesIO()
         if do_zip:
@@ -478,9 +487,9 @@ def ccboost_train(username, datasetName, modelName, mirror, numStumps, insidePix
         f.write("stack = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5\'\n")
         f.write("labels = \'" + curr_path + "/userInput/" + username + "/" + datasetName + "/labels.h5\'\n")
         f.write("model_name = " + modelName + "\n")
-        f.write("num_adaboost_stumps = " + numStumps +"\n")
-        f.write("mirror = " + mirror + "\n")
-        f.write("ignore = " + insidePixel + ", " + outsidePixel)
+        f.write("num_adaboost_stumps = " + str(numStumps) +"\n")
+        f.write("mirror = " + str(mirror) + "\n")
+        f.write("ignore = " + str(insidePixel) + ", " + str(outsidePixel))
 
     logPath = curr_path + "/userLogs/ccboost/" + username
     if not os.path.isdir(logPath):
@@ -496,8 +505,10 @@ def ccboost_train(username, datasetName, modelName, mirror, numStumps, insidePix
            dir_path + "/" + username + "/config/" + datasetName + ".cfg",
            "--username",
            username]
-    # print("DEBUGGING : {}".format(" ".join(cmd)))
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=sys.stdout.fileno(), bufsize=1)
+    p = subprocess.Popen(cmd,
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT,
+                         bufsize=1)
     for line in iter(p.stdout.readline, b''):
         if verbose:
             print(line.strip().decode("utf-8"))
@@ -526,7 +537,7 @@ def ccboost_test(username, datasetName, modelName, mirror):
     f.write("model_name = " + modelName + "\n")
     # This is irrelevant, the handler will find the txt file with the number
     f.write("num_adaboost_stumps = 2000\n")
-    f.write("mirror = " + mirror + "\n")
+    f.write("mirror = " + str(mirror) + "\n")
     f.close()
 
     logPath = curr_path + "/userLogs/ccboost/" + username
@@ -543,7 +554,10 @@ def ccboost_test(username, datasetName, modelName, mirror):
          "--test",
          dir_path + "/" + username + "/config/" + datasetName + ".cfg",
          "--username",
-         username], stdout=subprocess.PIPE, bufsize=1)
+         username],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=1)
     for line in iter(p.stdout.readline, b''):
         if verbose:
             print(line.strip().decode("utf-8"))
@@ -596,6 +610,7 @@ def unet_test(username, datasetName, modelName, gadChannel, gpu, batchsize):
         cmd,
         env=my_env,
         stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         bufsize=1)
 
     for line in iter(p.stdout.readline, b''):
