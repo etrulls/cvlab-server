@@ -1,6 +1,7 @@
 from __future__ import print_function
 from flask import Flask, request, render_template
 from flask_restful import Resource, Api
+from time import time
 from datetime import datetime
 import numpy as np
 import base64
@@ -19,11 +20,18 @@ import psutil
 # Set workspace folder
 curr_path = os.path.dirname(os.path.realpath(__file__))
 
-# Services should be symlinked inside here
+# Services should be symlinked inside this folder
 if not os.path.isdir(curr_path + "/ccboost-service"):
     raise RuntimeError("Cannot find service 'CCboost'. Forgot to symlink?")
 if not os.path.isdir(curr_path + "/unet-service"):
     raise RuntimeError("Cannot find service 'U-Net'. Forgot to symlink?")
+
+# Link to virtual environments
+python_ccboost = "/cvlabdata1/home/eduard/venvs/ccboost/bin/python"
+python_unet = "/cvlabdata1/home/eduard/venvs/torch-0.3/bin/python"
+
+# Data compression seems to take to long
+do_zip = False
 
 # Create API
 app = Flask(__name__)
@@ -34,6 +42,15 @@ app.config['MAX_CONTENT_LENGTH'] = 1000000000
 # Fix for windows (client side)
 std_base64chars = "+"
 custom_base64chars = ")"
+
+
+def stamp(string):
+    return datetime.fromtimestamp(time()).strftime('%H:%M:%S ') + string
+
+
+def appendLog(logPath, string, lim="\n"):
+    with open(logPath, "a") as f:
+        f.write(string + lim)
 
 
 def getCCboostModels(path):
@@ -158,7 +175,10 @@ def downloadFun():
             with h5py.File(fn, 'r', driver=None) as h5:
                 data = h5['data'].value
             f = BytesIO()
-            np.savez_compressed(f, data=data)
+            if do_zip:
+                np.savez_compressed(f, data=data)
+            else:
+                np.savez(f, data=data)
             f.seek(0)
             payload = f.read()
             return payload, 200
@@ -245,12 +265,8 @@ def trainFun():
         # Labels are mandatory
         labels = np.load(BytesIO(bodyClear))['labels']
         with h5py.File(inputDirectory + 'labels.h5', 'w', driver=None) as h5:
-            if labels.shape[3] == 1:
-                labels = np.reshape(
-                    labels,
-                    (labels.shape[0],
-                     labels.shape[1],
-                     labels.shape[2]))
+            if labels.ndims == 4 and labels.shape[-1] == 1:
+                labels = labels[:, :, :, 0]
             # Transform labels from ilastik conventions to ours
             # ccboost: (255 = positive, 0 = negative, everything else ignored)
             my_dict = {0: 128, 1: 0, 2: 255}
@@ -263,14 +279,9 @@ def trainFun():
         if not dataOnServer:
             image = np.load(BytesIO(bodyClear))['image']
             with h5py.File(inputDirectory + '/data.h5', 'w', driver=None) as h5:
-                # Ilastik sends data in shape (x,y,z,1) when image is grayscale
-                # We need (x,y,z)
-                if image.shape[3] == 1:
-                    image = np.reshape(
-                        image,
-                        (image.shape[0],
-                         image.shape[1],
-                         image.shape[2]))
+                # Ilastik sends grayscale data as (x,y,z,1) -> we need (x,y,z)
+                if image.ndims == 4 and image.shape[-1] == 1:
+                    image = image[:, :, :, 0]
                 h5.create_dataset('data', data=image)
 
         # Service and parameters
@@ -283,27 +294,28 @@ def trainFun():
                                 int(request.headers['ccboost-num-stumps']),
                                 int(request.headers['ccboost-inside-pixel']),
                                 int(request.headers['ccboost-outside-pixel']))
+            logPath = curr_path + "/userLogs/ccboost/" + username + "/" + datasetName + "-" + modelName + ".txt"
         else:
             return 'Cannot train for service "{}"'.format(serviceName), 500
+
+        appendLog(logPath, stamp("Loading data to send it back"))
 
         # fetch result and send it back
         with h5py.File(out, 'r', driver=None) as h5:
             result = h5['data'].value
-            result = np.reshape(
-                result,
-                (result.shape[0],
-                 result.shape[1],
-                 result.shape[2],
-                 1))
+            result = np.expand_dims(result, axis=3)
 
         f = BytesIO()
-        np.savez_compressed(f, result=result)
+        if do_zip:
+            np.savez_compressed(f, result=result)
+        else:
+            np.savez(f, result=result)
         f.seek(0)
-        compressed_data = f.read()
-        # compressedData64 = base64.b64encode(compressed_data)
+        payload = f.read()
+        # payload_Data64 = base64.b64encode(payload)
 
         # os.remove(logPath)
-        return compressed_data, 200
+        return payload, 200
     else:
         return 'Not authorized', 401
 
@@ -346,48 +358,35 @@ def testNewFun():
         with h5py.File(inputDirectory + 'data.h5', 'w', driver=None) as h5:
             # Ilastik sends data in shape (x,y,z,1) when image is grayscale
             # We need (x,y,z)
-            if image.ndim == 4:
-                if image.shape[3] == 1:
-                    image = np.reshape(
-                        image,
-                        (image.shape[0],
-                         image.shape[1],
-                         image.shape[2]))
+            if image.ndim == 4 and image.shape[-1] == 1:
+                image = image[:, :, :, 0]
             h5.create_dataset('data', data=image)
 
         if serviceName == 'CCboost (test)':
             out = ccboost_test(username, datasetName, modelName, mirror)
-
-            # Fetch result
-            with h5py.File(out, 'r', driver=None) as h5:
-                result = h5['data'].value
-                result = np.reshape(
-                    result,
-                    (result.shape[0],
-                     result.shape[1],
-                     result.shape[2],
-                     1))
+            logPath = curr_path + "/userLogs/ccboost/" + username + "/" + datasetName + "-" + modelName + ".txt"
         elif serviceName == 'U-Net GAD mouse (test)':
             out = unet_test(username, datasetName, modelName, gadChannel, gpu, batchsize)
+            logPath = curr_path + "/userLogs/unet/" + username + "/" + datasetName + "-" + modelName + ".txt"
 
-            # Fetch result
-            with h5py.File(out, 'r', driver=None) as h5:
-                result = h5['data'].value
-                result = np.reshape(
-                    result,
-                    (result.shape[0],
-                     result.shape[1],
-                     result.shape[2],
-                     1))
+        appendLog(logPath, stamp("Loading data to send it back"))
+
+        # Fetch result
+        with h5py.File(out, 'r', driver=None) as h5:
+            result = h5['data'].value
+            result = np.expand_dims(result, axis=3)
 
         f = BytesIO()
-        np.savez_compressed(f, result=result)
+        if do_zip:
+            np.savez_compressed(f, result=result)
+        else:
+            np.savez(f, result=result)
         f.seek(0)
-        compressed_data = f.read()
-        # compressedData64 = base64.b64encode(compressed_data)
+        payload = f.read()
+        # payload_Data64 = base64.b64encode(payload)
 
         # os.remove(logPath)
-        return compressed_data, 200
+        return payload, 200
     else:
         return 'Not authorized', 401
 
@@ -416,37 +415,29 @@ def testOldFun():
 
         if serviceName == 'CCboost (test)':
             out = ccboost_test(username, datasetName, modelName, mirror)
-
-            # Fetch result
-            with h5py.File(out, 'r', driver=None) as h5:
-                result = h5['data'].value
-                result = np.reshape(
-                    result,
-                    (result.shape[0],
-                     result.shape[1],
-                     result.shape[2],
-                     1))
+            logPath = curr_path + "/userLogs/ccboost/" + username + "/" + datasetName + "-" + modelName + ".txt"
         elif serviceName == 'U-Net GAD mouse (test)':
             out = unet_test(username, datasetName, modelName, gadChannel, gpu, batchsize)
+            logPath = curr_path + "/userLogs/unet/" + username + "/" + datasetName + "-" + modelName + ".txt"
 
-            # Fetch result
-            with h5py.File(out, 'r', driver=None) as h5:
-                result = h5['data'].value
-                result = np.reshape(
-                    result,
-                    (result.shape[0],
-                     result.shape[1],
-                     result.shape[2],
-                     1))
+        appendLog(logPath, stamp("Loading data to send it back"))
+
+        # Fetch result
+        with h5py.File(out, 'r', driver=None) as h5:
+            result = h5['data'].value
+            result = np.expand_dims(result, axis=3)
 
         f = BytesIO()
-        np.savez_compressed(f, result=result)
+        if do_zip:
+            np.savez_compressed(f, result=result)
+        else:
+            np.savez(f, result=result)
         f.seek(0)
-        compressed_data = f.read()
-        # compressedData64 = base64.b64encode(compressed_data)
+        payload = f.read()
+        # payload_Data64 = base64.b64encode(payload)
 
         # os.remove(logPath)
-        return compressed_data, 200
+        return payload, 200
     else:
         return 'Not authorized', 401
 
@@ -499,7 +490,7 @@ def ccboost_train(username, datasetName, modelName, mirror, numStumps, insidePix
         os.remove(logPath)
     with open(logPath, "w") as f:
         f.write("-- Starting CCBOOST service --\n")
-    cmd = ["/cvlabdata1/home/eduard/venvs/ccboost/bin/python",
+    cmd = [python_ccboost,
            "ccboost-service/handler.py",
            "--train",
            dir_path + "/" + username + "/config/" + datasetName + ".cfg",
@@ -547,7 +538,7 @@ def ccboost_test(username, datasetName, modelName, mirror):
     with open(logPath, "w") as f:
         f.write("-- Starting CCBOOST service --\n")
     p = subprocess.Popen(
-        ["/cvlabdata1/home/eduard/venvs/ccboost/bin/python",
+        [python_ccboost,
          "ccboost-service/handler.py",
          "--test",
          dir_path + "/" + username + "/config/" + datasetName + ".cfg",
@@ -589,7 +580,7 @@ def unet_test(username, datasetName, modelName, gadChannel, gpu, batchsize):
 
     # Command
     cmd = [
-        "/cvlabdata1/home/eduard/venvs/torch-0.3/bin/python",
+        python_unet,
         "unet-service/handler.py",
         "--username", "{}".format(username),
         "--model-name", "{}".format(modelName),
