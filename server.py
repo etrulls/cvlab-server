@@ -218,7 +218,7 @@ def progressFun():
             model_name = request.headers['model-name']
             serviceName = request.headers['service-name']
 
-            if serviceName in ['CCboost (test)', 'CCboost (test)']:
+            if serviceName in ['CCboost (test)', 'CCboost (train)']:
                 folder = curr_path + "/userLogs/ccboost/" + username
             elif serviceName == 'U-Net GAD mouse (test)':
                 folder = curr_path + "/userLogs/unet/" + username
