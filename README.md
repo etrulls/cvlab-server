@@ -24,4 +24,4 @@ use different virtual environments: please refer to `server.py` for details.
 The server can be run with:
 ```
 python server.py --port <NUMBER> [--verbose]
-'''
+```
