@@ -5,7 +5,8 @@ allows to use it in conjunction with services running on remote computers.
 This allows us to leverage the annotation and visualization capabilities of
 Ilastik while executing the bulk of the computation on software components
 running on external resources, free of dependencies. This work has been
-developed within the context of the Human Brain Project.
+developed by the [Computer Vision lab at EPFL](https://cvlab.epfl.ch) within
+the context of the Human Brain Project.
 
 The server is written in Python 3 using Flask. Please consult `reqs.txt` for a
 list of requirements (probably overtuned, but given for reference). You may
