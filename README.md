@@ -19,9 +19,10 @@ and then copy the private key into `server.key` and the public key into
 
 External services can be written in any language. We currently have:
 * [CCboost component](https://github.com/etrulls/ccboost-service)
-* [U-Net component](https://github.com/etrulls/unet-service)
+* [U-Net segmentation component](https://github.com/etrulls/unet-service)
+* [Vesicle density estimation component](https://github.com/etrulls/density-service)
 
-Both are writte on or wrapped by Python code, and must be symlinked into this
+Both are written on or wrapped by Python code, and must be symlinked into this
 folder. You may use different virtual environments: please refer to `server.py`
 for details.
 
