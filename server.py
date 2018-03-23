@@ -24,11 +24,14 @@ curr_path = os.path.dirname(os.path.realpath(__file__))
 if not os.path.isdir(curr_path + "/ccboost-service"):
     raise RuntimeError("Cannot find service 'CCboost'. Forgot to symlink?")
 if not os.path.isdir(curr_path + "/unet-service"):
-    raise RuntimeError("Cannot find service 'U-Net'. Forgot to symlink?")
+    raise RuntimeError("Cannot find service 'U-Net/GAD segmentation'. Forgot to symlink?")
+if not os.path.isdir(curr_path + "/density-service"):
+    raise RuntimeError("Cannot find service 'U-Net/vesicle density'. Forgot to symlink?")
 
 # Link to virtual environments
 python_ccboost = "/cvlabdata1/home/eduard/venvs/ccboost/bin/python"
 python_unet = "/cvlabdata1/home/eduard/venvs/torch-0.3/bin/python"
+python_density = "/cvlabdata1/home/eduard/venvs/torch-0.3/bin/python"
 
 # Data compression seems to take to long
 do_zip = False
@@ -110,6 +113,7 @@ def loginFun():
             'CCboost (train)',
             'CCboost (test)',
             'U-Net GAD mouse (test)',
+            'U-Net Vesicle density (test)',
         ]
 
         # Retrieve uploaded data
@@ -133,9 +137,18 @@ def loginFun():
         # List GAD models
         unetGadModelList = ["GadMouseCh1", "GadMouseCh2"]
 
+        # List density models
+        vesicleDensityModelList = ["VesicleDensity"]
+
         # Return np array of list (Ilastik slots are np arrays)
         f = BytesIO()
-        np.savez(f, services=services, data=dataList, ccboostModels=ccboostModelList, unetGadModels=unetGadModelList)
+        np.savez(
+            f,
+            services=services,
+            data=dataList,
+            ccboostModels=ccboostModelList,
+            unetGadModels=unetGadModelList,
+            vesicleDensityModels=vesicleDensityModelList)
         f.seek(0)
         payload = f.read()
         return payload, 200
@@ -222,6 +235,8 @@ def progressFun():
                 folder = curr_path + "/userLogs/ccboost/" + username
             elif serviceName == 'U-Net GAD mouse (test)':
                 folder = curr_path + "/userLogs/unet/" + username
+            elif serviceName == 'U-Net Vesicle density (test)':
+                folder = curr_path + "/userLogs/density/" + username
             else:
                 return 'Unrecognized service', 500
 
@@ -349,9 +364,13 @@ def testNewFun():
             elif modelName == 'GadMouseCh2':
                 gadChannel = '2'
             else:
-                return "Cannot find GAD model", 500
+                return "Cannot find requested model", 500
             gpu = int(request.headers['gpu'])
             batchsize = int(request.headers['batchsize'])
+        elif serviceName == 'U-Net Vesicle density (test)':
+            if modelName != 'VesicleDensity':
+                return "Cannot find requested model", 500
+            gpu = int(request.headers['gpu'])
 
         # Save data in h5 format
         inputDirectory = curr_path + '/userInput/' + username + "/" + datasetName + "/"
@@ -371,6 +390,11 @@ def testNewFun():
         elif serviceName == 'U-Net GAD mouse (test)':
             out = unet_test(username, datasetName, modelName, gadChannel, gpu, batchsize)
             logPath = curr_path + "/userLogs/unet/" + username + "/" + datasetName + "-" + modelName + ".txt"
+        elif serviceName == 'U-Net Vesicle density (test)':
+            out = density_test(username, datasetName, modelName, gpu)
+            logPath = curr_path + "/userLogs/density/" + username + "/" + datasetName + "-" + modelName + ".txt"
+        else:
+            return "Unrecognized service", 500
 
         # Fetch result
         if os.path.isfile(out):
@@ -418,6 +442,10 @@ def testOldFun():
                 return "Cannot find GAD model"
             gpu = int(request.headers['gpu'])
             batchsize = int(request.headers['batchsize'])
+        elif serviceName == 'U-Net Vesicle density (test)':
+            if modelName != 'VesicleDensity':
+                return "Cannot find requested model", 500
+            gpu = int(request.headers['gpu'])
 
         # Operate
         if serviceName == 'CCboost (test)':
@@ -426,6 +454,11 @@ def testOldFun():
         elif serviceName == 'U-Net GAD mouse (test)':
             out = unet_test(username, datasetName, modelName, gadChannel, gpu, batchsize)
             logPath = curr_path + "/userLogs/unet/" + username + "/" + datasetName + "-" + modelName + ".txt"
+        elif serviceName == 'U-Net Vesicle density (test)':
+            out = density_test(username, datasetName, modelName, gpu)
+            logPath = curr_path + "/userLogs/density/" + username + "/" + datasetName + "-" + modelName + ".txt"
+        else:
+            return "Unrecognized service", 500
 
         # Fetch result
         if os.path.isfile(out):
@@ -590,7 +623,7 @@ def unet_test(username, datasetName, modelName, gadChannel, gpu, batchsize):
 
     # Pass GPU masking as environment variable
     my_env = os.environ.copy()
-    my_env['CUDA_VISIBLE_DEVICES'] = '2'
+    my_env['CUDA_VISIBLE_DEVICES'] = str(gpu)
 
     # Command
     cmd = [
@@ -602,10 +635,61 @@ def unet_test(username, datasetName, modelName, gadChannel, gpu, batchsize):
         "--pickle", "unet-service/models/ch{}.pickle".format(gadChannel),
         "--weights", "unet-service/models/ch{}.pth".format(gadChannel),
         "--batch-size", "{}".format(batchsize),
-        "--input", "{}".format(input_file),
+        "--input", input_file,
     ]
     if int(gpu) < 0:
         cmd += ["--use-cpu"]
+    p = subprocess.Popen(
+        cmd,
+        env=my_env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        bufsize=1)
+
+    for line in iter(p.stdout.readline, b''):
+        if verbose:
+            print(line.strip().decode("utf-8"))
+        f = open(logPath, "a")
+        f.write(line.decode("utf-8"))
+        f.close()
+    p.stdout.close()
+    p.wait()
+
+    fn = dir_path + "/" + username + "/runs/model-" + modelName + \
+        "/data-" + datasetName + "/output.h5"
+    return fn
+
+
+def density_test(username, datasetName, modelName, gpu):
+    dir_path = curr_path + "/density-service/workspace"
+
+    logPath = curr_path + "/userLogs/density/" + username
+    if not os.path.isdir(logPath):
+        os.makedirs(logPath)
+
+    logPath = logPath + "/" + datasetName + "-" + modelName + ".txt"
+    if os.path.isfile(logPath):
+        os.remove(logPath)
+
+    with open(logPath, "w") as f:
+        f.write("-- Starting vesicle density estimation service --\n")
+
+    input_file = curr_path + "/userInput/" + username + "/" + datasetName + "/data.h5"
+
+    # Pass GPU masking as environment variable
+    my_env = os.environ.copy()
+    my_env['CUDA_VISIBLE_DEVICES'] = str(gpu)
+
+    # Command
+    cmd = [
+        python_density,
+        "density-service/handler.py",
+        "--username", "{}".format(username),
+        "--model-name", "{}".format(modelName),
+        "--dataset-name", "{}".format(datasetName),
+        "--weights", "density-service/models/pwdensity3d_scale1000_0015000.pth",
+        "--input", input_file,
+    ]
     p = subprocess.Popen(
         cmd,
         env=my_env,
